@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
-import { createServiceRoleClient } from "../_shared/client.ts";
-import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
-import type { Database } from "../_shared/types.ts";
+import { createServiceRoleClient } from "../shared/client.ts";
+import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
+import type { Database } from "../shared/types.ts";
 
 const DAYS_30 = 30;
 
@@ -226,7 +226,7 @@ async function buildMetricsSummary(supabase: SupabaseClient, userId: string): Pr
   };
 }
 
-serve(async (req) => {
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return emptyResponse();
   }
@@ -259,4 +259,8 @@ serve(async (req) => {
       error instanceof Error ? error.message : error,
     );
   }
-});
+};
+
+if (import.meta.main) {
+  serve(handler);
+}

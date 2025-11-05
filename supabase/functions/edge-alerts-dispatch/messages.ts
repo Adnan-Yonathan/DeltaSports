@@ -1,4 +1,4 @@
-import type { AlertOrigin } from "../shared/types.ts";
+import type { AlertOrigin } from "../shared/database.types.ts";
 
 export type DispatchTone = "concise" | "engaging" | "analytical";
 

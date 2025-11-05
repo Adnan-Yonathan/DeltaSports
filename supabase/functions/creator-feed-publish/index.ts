@@ -1,7 +1,12 @@
+import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "@shared/client.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "@shared/response.ts";
-import { publishCreatorUpdate } from "./publish.ts";
-import type { PublishPayload } from "./publish.ts";
+import type {
+  CreatorPost,
+  CreatorProfile,
+  CreatorSubscription,
+  Database,
+} from "@shared/types.ts";
 
 Deno.serve((req) => handler(req));
 

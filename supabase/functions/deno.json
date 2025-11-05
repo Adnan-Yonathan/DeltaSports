@@ -1,8 +1,12 @@
 {
-  "imports": {
-    "@shared/": "./shared/"
+  "importMap": "./import_map.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "strict": true
   },
   "tasks": {
-    "check": "deno check ./bankroll-metrics-sync/index.ts ./chat-digest/index.ts ./creator-feed-publish/index.ts ./edge-alerts-ack/index.ts ./edge-alerts-dispatch/index.ts ./ev-scanner-refresh/index.ts ./on-auth-profile/index.ts"
+    "check": "deno check ./bankroll-metrics-sync/index.ts ./chat-digest/index.ts ./creator-feed-publish/index.ts ./edge-alerts-ack/index.ts ./edge-alerts-dispatch/index.ts ./ev-scanner-refresh/index.ts ./on-auth-profile/index.ts ./shared/client.ts ./shared/env.ts ./shared/response.ts ./shared/types.ts",
+    "fmt": "deno fmt",
+    "test": "deno test"
   }
 }

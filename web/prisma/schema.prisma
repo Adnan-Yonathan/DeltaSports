@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  title     String
+  model     String   @default("gpt-4o")
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  Message[]
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId String
+  role           MessageRole
+  content        Json
+  tokens         Int?
+  createdAt      DateTime @default(now())
+  toolCalls      ToolCall[]
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+
+model ToolCall {
+  id        String   @id @default(cuid())
+  message   Message  @relation(fields: [messageId], references: [id])
+  messageId String
+  name      String
+  args      Json
+  result    Json?
+  latencyMs Int?
+  createdAt DateTime @default(now())
+}

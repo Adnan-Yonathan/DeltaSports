@@ -224,7 +224,16 @@ export function ChatPageClient({ conversationId, initialMessages, initialModel, 
     } finally {
       setIsStreaming(false);
     }
-  }, [conversationId, isStreaming, messages, model, prompt, streamingMessage, temperature]);
+  }, [
+    conversationId,
+    isStreaming,
+    league,
+    messages,
+    model,
+    prompt,
+    streamingMessage,
+    temperature,
+  ]);
 
   return (
     <div className="flex flex-1 flex-col">

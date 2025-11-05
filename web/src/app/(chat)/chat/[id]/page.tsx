@@ -7,7 +7,15 @@ import { listMessages } from "@/lib/repos/messages";
 
 import type { ChatListItem } from "@/components/chat/ChatList";
 
-async function getData(id: string) {
+type ChatsResult = Awaited<ReturnType<typeof listChats>>;
+type MessagesResult = Awaited<ReturnType<typeof listMessages>>;
+type ChatResult = Awaited<ReturnType<typeof getChat>>;
+
+async function getData(id: string): Promise<{
+  chats: ChatsResult;
+  messages: MessagesResult;
+  chat: ChatResult;
+}> {
   const [chats, messages, chat] = await Promise.all([
     listChats(),
     listMessages(id),
@@ -27,7 +35,7 @@ export default async function ChatPage({ params }: PageProps) {
     notFound();
   }
 
-  const sidebarChats: ChatListItem[] = chats.map((item) => ({
+  const sidebarChats: ChatListItem[] = chats.map((item: ChatsResult[number]) => ({
     id: item.id,
     title: item.title,
     pinned: item.pinned,

@@ -10,7 +10,7 @@ import type {
 
 type DigestTone = "concise" | "engaging" | "analytical";
 
-type DigestPayload = {
+export type DigestPayload = {
   userProfileId: string;
   tone?: DigestTone;
 };

@@ -7,7 +7,7 @@ each folder houses one function plus any feature-specific README with payload sa
 
 ```
 supabase/functions/
-  shared/                   # Cross-function utilities (env, client, response helpers)
+  _shared/                  # Cross-function utilities (env, client, response helpers)
   bankroll-metrics-sync/     # Recalculate bankroll metrics after bet inserts/updates
   chat-digest/               # Build conversational digests for the home hub
   creator-feed-publish/      # Publish creator posts & notify subscribers

@@ -34,3 +34,9 @@ Contains the TypeScript definitions for the public schema of the Supabase
 PostgreSQL database. The exported helpers (`Tables`, `TablesRow`, `TablesInsert`,
 and `TablesUpdate`) make it easy to infer strongly typed rows and mutations for
 any table when writing database queries.
+
+### `index.ts`
+Acts as a barrel file that re-exports the utilities above. Importing from this
+single module keeps Edge Functions decoupled from the internal directory
+structure while still providing access to the environment, client, response, and
+typed database helpers.

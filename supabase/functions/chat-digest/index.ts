@@ -1,12 +1,12 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
-import { createServiceRoleClient } from "../shared/client.ts";
-import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
+import { createServiceRoleClient } from "@shared/client.ts";
+import { emptyResponse, errorResponse, jsonResponse } from "@shared/response.ts";
 import type {
   BankrollAccount,
   Bet,
   EdgeAlert,
   UserProfile,
-} from "../shared/types.ts";
+} from "@shared/types.ts";
 
 type DigestTone = "concise" | "engaging" | "analytical";
 

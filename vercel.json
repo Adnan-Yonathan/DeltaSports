@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "builds": [
     {
       "src": "web/package.json",
@@ -13,5 +14,6 @@
   ],
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "devCommand": "npm run dev"
+  "devCommand": "npm run dev",
+  "outputDirectory": ".next"
 }

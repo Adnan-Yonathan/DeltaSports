@@ -5,7 +5,11 @@ import {
   streamDeltaResponse,
   type DeltaChatMessage,
 } from "@/lib/llm/openai";
-import { fetchSportsData, type NormalizedSportsData } from "@/lib/tools/sports";
+import {
+  fetchSportsData,
+  type NormalizedSportsData,
+  type SportsQuery,
+} from "@/lib/tools/sports";
 import { createChat, getChat, updateChat } from "@/lib/repos/chats";
 import { prisma } from "@/lib/db";
 
@@ -39,16 +43,17 @@ export async function POST(req: NextRequest) {
   let sportsData: NormalizedSportsData | undefined;
 
   if (lastUser) {
-    const plannedTool = planSportsTool(lastUser.content) as SportsQuery | null;
+    const plannedTool = planSportsTool(lastUser.content);
     if (plannedTool) {
-      const response = await fetchSportsData({
+      const sportsQuery: SportsQuery = {
         intent: plannedTool.intent,
         query: lastUser.content,
         league: plannedTool.league,
         market: plannedTool.market,
         team: plannedTool.team,
         player: plannedTool.player,
-      });
+      };
+      const response = await fetchSportsData(sportsQuery);
       sportsData = response.data;
     }
   }

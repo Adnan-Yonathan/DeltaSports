@@ -1,12 +1,12 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
-import { createServiceRoleClient } from "../shared/client.ts";
-import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
+import { createServiceRoleClient } from "../_shared/client.ts";
+import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
 import type {
   CreatorPost,
   CreatorProfile,
   CreatorSubscription,
   Database,
-} from "../shared/types.ts";
+} from "../_shared/types.ts";
 
 type PublishPayload = {
   creatorId?: string;

@@ -31,7 +31,6 @@
   "devDependencies": {
     "@playwright/test": "^1.43.1",
     "@types/dompurify": "^3.0.5",
-    "@types/fuse.js": "^6.4.3",
     "@types/jest": "^29.5.12",
     "@types/node": "20.11.30",
     "@types/react": "18.3.3",

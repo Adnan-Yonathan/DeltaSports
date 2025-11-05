@@ -9,6 +9,7 @@
     "dev": "npm run dev --workspace web",
     "start": "npm run start --workspace web",
     "lint": "npm run lint --workspace web",
-    "test:functions": "cd supabase/functions && deno task test"
+    "test:functions": "cd supabase/functions && deno task test",
+    "postinstall": "npm run postinstall --workspace web"
   }
 }

@@ -1,7 +1,13 @@
 import { prisma } from "../db";
 import type { Prisma } from "@prisma/client";
 
-export async function listMessages(conversationId: string) {
+export type MessageWithToolCalls = Prisma.MessageGetPayload<{
+  include: { toolCalls: true };
+}>;
+
+export async function listMessages(
+  conversationId: string,
+): Promise<MessageWithToolCalls[]> {
   return prisma.message.findMany({
     where: { conversationId },
     include: { toolCalls: true },

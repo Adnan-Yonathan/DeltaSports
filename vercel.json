@@ -1,12 +1,5 @@
 {
-  "buildCommand": "cd web && npm run build",
-  "installCommand": "cd web && npm install",
-  "framework": "nextjs",
-  "outputDirectory": "web/.next",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/$1"
-    }
-  ]
+  "installCommand": "sh -c 'if [ -d web ]; then cd web; fi; npm install'",
+  "buildCommand": "sh -c 'if [ -d web ]; then cd web; fi; npm run build'",
+  "framework": "nextjs"
 }

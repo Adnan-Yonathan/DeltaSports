@@ -1,0 +1,33 @@
+name: Supabase Functions CI
+
+on:
+  push:
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/supabase-functions-deno.yml"
+      - "package.json"
+  pull_request:
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/supabase-functions-deno.yml"
+      - "package.json"
+
+jobs:
+  deno:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Run deno task check
+        working-directory: supabase/functions
+        run: deno task check
+
+      - name: Run deno task test
+        working-directory: supabase/functions
+        run: deno task test

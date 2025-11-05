@@ -9,6 +9,6 @@
     "dev": "npm run dev --workspace web",
     "start": "npm run start --workspace web",
     "lint": "npm run lint --workspace web",
-    "test:functions": "npx tsc -p supabase/functions/tsconfig.json && node --test supabase/functions/tests/edge-functions.test.mjs"
+    "test:functions": "cd supabase/functions && deno task test"
   }
 }

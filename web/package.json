@@ -35,7 +35,6 @@
     "@types/node": "20.11.30",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
-    "@types/remark-gfm": "^3.0.4",
     "autoprefixer": "10.4.17",
     "eslint": "8.57.0",
     "eslint-config-next": "14.2.3",

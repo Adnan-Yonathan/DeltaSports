@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 const featureHighlights = [
   {
     title: "Conversational Home Hub",
@@ -48,9 +46,9 @@ export default function HomePage() {
             <article key={feature.title} className="rounded-xl border border-white/5 bg-black/20 p-6">
               <h3 className="text-xl font-semibold text-white">{feature.title}</h3>
               <p className="mt-2 text-sm text-slate-300">{feature.description}</p>
-              <Link className="mt-4 inline-flex text-sm font-medium text-brand-accent" href={feature.href}>
+              <a className="mt-4 inline-flex text-sm font-medium text-brand-accent" href={feature.href}>
                 {feature.cta}
-              </Link>
+              </a>
             </article>
           ))}
         </div>

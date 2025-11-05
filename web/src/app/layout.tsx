@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="flex flex-wrap gap-4 text-sm text-slate-300">
               <Link href="/#features">Features</Link>
               <Link href="/#integrations">Integrations</Link>
-              <Link href="/(app)/dashboard">Command Center</Link>
+              <Link href="/dashboard">Command Center</Link>
               <Link href="/#cta">Get Access</Link>
             </nav>
           </header>

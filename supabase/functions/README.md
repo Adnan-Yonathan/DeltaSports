@@ -7,7 +7,7 @@ each folder houses one function plus any feature-specific README with payload sa
 
 ```
 supabase/functions/
-  _shared/                   # Cross-function utilities (env, client, response helpers)
+  shared/                   # Cross-function utilities (env, client, response helpers)
   bankroll-metrics-sync/     # Recalculate bankroll metrics after bet inserts/updates
   chat-digest/               # Build conversational digests for the home hub
   creator-feed-publish/      # Publish creator posts & notify subscribers
@@ -61,3 +61,13 @@ Client-facing keys remain in `web/.env.example`; only privileged keys are loaded
 - **Edge alerts:** wire `edge-alerts-dispatch` to upstream scanners (e.g., LLM orchestrator) and use `edge-alerts-ack` for chat acknowledgements. Both functions log to `alert_events`, giving you a full lifecycle trail for analytics.
 
 For production deployments, run `supabase functions deploy <name> --env-file ../.env` and validate logs in the Supabase dashboard (`Project Settings → Logs → Edge Functions`).
+
+## Testing
+
+Run the shared helper unit tests (covering alert normalization and notification formatting) with:
+
+```bash
+npm run test:functions
+```
+
+The script compiles the reusable TypeScript utilities under `supabase/functions/` and then executes the Node.js test suite in `supabase/functions/tests/`.

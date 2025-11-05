@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
-import { createServiceRoleClient } from "../_shared/client.ts";
-import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
-import type { Database, EdgeAlert } from "../_shared/types.ts";
+import { createServiceRoleClient } from "../shared/client.ts";
+import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
+import type { Database, EdgeAlert } from "../shared/types.ts";
 
 type SupabaseClient = ReturnType<typeof createServiceRoleClient>;
 
@@ -213,7 +213,7 @@ async function recordRefreshEvent(
   }
 }
 
-serve(async (req) => {
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return emptyResponse();
   }
@@ -270,4 +270,8 @@ serve(async (req) => {
 
   const summary = `${alerts.length} edge${alerts.length === 1 ? "" : "s"} refreshed above ${(threshold * 100).toFixed(1)}% EV.`;
   return jsonResponse({ status: "ok", alerts, summary });
-});
+};
+
+if (import.meta.main) {
+  serve(handler);
+}

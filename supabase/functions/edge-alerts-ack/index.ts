@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
-import { createServiceRoleClient } from "../_shared/client.ts";
-import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
-import type { AlertEvent, Database, EdgeAlert } from "../_shared/types.ts";
+import { createServiceRoleClient } from "../shared/client.ts";
+import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
+import type { AlertEvent, Database, EdgeAlert } from "../shared/types.ts";
+import { normalizeAction } from "./normalize-action.ts";
 
 type AckPayload = {
   alertId: string;
@@ -10,14 +11,6 @@ type AckPayload = {
   metadata?: Record<string, unknown>;
   resolveAlert?: boolean;
 };
-
-function normalizeAction(action?: string): string {
-  if (!action) {
-    return "acknowledged";
-  }
-  const trimmed = action.trim();
-  return trimmed.length > 0 ? trimmed : "acknowledged";
-}
 
 async function logEvent(
   supabase: ReturnType<typeof createServiceRoleClient>,
@@ -73,7 +66,7 @@ async function fetchAlert(
   return data as EdgeAlert;
 }
 
-serve(async (req) => {
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return emptyResponse();
   }
@@ -110,4 +103,8 @@ serve(async (req) => {
       error instanceof Error ? error.message : error,
     );
   }
-});
+};
+
+if (import.meta.main) {
+  serve(handler);
+}

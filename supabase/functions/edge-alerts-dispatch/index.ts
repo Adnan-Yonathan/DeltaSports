@@ -1,59 +1,21 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
-import { createServiceRoleClient } from "../_shared/client.ts";
-import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
-import type { AlertEvent, AlertOrigin, Database, EdgeAlert } from "../_shared/types.ts";
+import { createServiceRoleClient } from "../shared/client.ts";
+import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
+import type { AlertEvent, AlertOrigin, Database, EdgeAlert } from "../shared/types.ts";
+import {
+  buildAlertMessage,
+  DEFAULT_TONE,
+  DispatchAlert,
+  DispatchTone,
+  Notification,
+} from "./messages.ts";
 
 type SupabaseClient = ReturnType<typeof createServiceRoleClient>;
-
-type DispatchTone = "concise" | "engaging" | "analytical";
-
-type DispatchAlert = {
-  market: string;
-  sportsbook: string;
-  edgeValue: number;
-  triggerThreshold?: number;
-  trueProbability?: number;
-  origin?: AlertOrigin;
-  sourceHandle?: string | null;
-  userId?: string | null;
-  url?: string;
-  tone?: DispatchTone;
-  metadata?: Record<string, unknown>;
-};
 
 type DispatchPayload = {
   alerts: DispatchAlert[];
   defaultTone?: DispatchTone;
 };
-
-type Notification = {
-  alertId: string;
-  market: string;
-  sportsbook: string;
-  message: string;
-  tone: DispatchTone;
-  url?: string;
-};
-
-const DEFAULT_TONE: DispatchTone = "concise";
-
-function buildAlertMessage(alert: DispatchAlert, tone: DispatchTone): string {
-  const pctEdge = (alert.edgeValue * 100).toFixed(1);
-  const oddsString = alert.edgeValue >= 0
-    ? `${pctEdge}% edge`
-    : `${Math.abs(alert.edgeValue * 100).toFixed(1)}% negative EV`;
-
-  switch (tone) {
-    case "engaging":
-      return `🚨 ${alert.market}: ${alert.sportsbook} is hanging value (${oddsString}). Jump before it moves!`;
-    case "analytical":
-      return `${alert.market} @ ${alert.sportsbook} => ${oddsString}; trigger ${
-        (alert.triggerThreshold ?? 0) * 100
-      }% | origin ${alert.origin ?? "model"}`;
-    default:
-      return `${alert.market} @ ${alert.sportsbook}: ${oddsString}`;
-  }
-}
 
 async function insertEdgeAlert(
   supabase: SupabaseClient,
@@ -118,7 +80,7 @@ async function insertEdgeAlert(
   };
 }
 
-serve(async (req) => {
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return emptyResponse();
   }
@@ -168,4 +130,8 @@ serve(async (req) => {
     alerts: results,
     notifications,
   });
-});
+};
+
+if (import.meta.main) {
+  serve(handler);
+}

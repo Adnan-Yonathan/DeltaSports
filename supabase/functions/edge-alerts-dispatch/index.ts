@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
-import { createServiceRoleClient } from "../shared/client.ts";
-import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
-import type { AlertEvent, AlertOrigin, Database, EdgeAlert } from "../shared/types.ts";
+import { createServiceRoleClient } from "@shared/client.ts";
+import { emptyResponse, errorResponse, jsonResponse } from "@shared/response.ts";
+import type { AlertEvent, AlertOrigin, Database, EdgeAlert } from "@shared/types.ts";
 import {
   buildAlertMessage,
   DEFAULT_TONE,

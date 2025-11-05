@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../_shared/client.ts";
+import { requireUser, UnauthorizedError } from "../_shared/auth.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
 import type {
   BankrollAccount,
@@ -43,7 +44,10 @@ async function fetchProfile(supabase: SupabaseClient, userProfileId: string) {
     .eq("id", userProfileId)
     .single();
   if (error) {
-    console.error("chat-digest: failed to load profile", userProfileId, error);
+    if (error.message?.includes("PGRST116")) {
+      return null;
+    }
+    throw new Error(`Failed to load profile: ${error.message}`);
   }
   return (data ?? null) as UserProfile | null;
 }
@@ -178,6 +182,18 @@ serve(async (req) => {
     return errorResponse("Method not allowed", 405);
   }
 
+  let authUserId: string;
+  try {
+    const user = await requireUser(req);
+    authUserId = user.id;
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return errorResponse(error.message, error.status);
+    }
+    console.error("chat-digest: failed to authenticate request", error);
+    return errorResponse("Unauthorized", 401);
+  }
+
   let payload: DigestPayload;
   try {
     payload = await req.json();
@@ -194,8 +210,15 @@ serve(async (req) => {
   const supabase = createServiceRoleClient();
 
   try {
-    const [profile, bankrolls, bets, alerts] = await Promise.all([
-      fetchProfile(supabase, payload.userProfileId),
+    const profile = await fetchProfile(supabase, payload.userProfileId);
+    if (!profile) {
+      return errorResponse("Profile not found", 404);
+    }
+    if (profile.auth_user_id !== authUserId) {
+      return errorResponse("Forbidden", 403);
+    }
+
+    const [bankrolls, bets, alerts] = await Promise.all([
       fetchBankrolls(supabase, payload.userProfileId),
       fetchRecentBets(supabase, payload.userProfileId),
       fetchActiveAlerts(supabase, payload.userProfileId),

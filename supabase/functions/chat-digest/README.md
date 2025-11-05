@@ -2,6 +2,9 @@
 
 Generates a conversational-ready summary that the home hub can display based on bankroll, bet, and alert data.
 
+- Requires an `Authorization: Bearer <access_token>` header for the profile owner.
+- Only the authenticated bettor can request a digest for their `userProfileId`.
+
 ## Payload
 
 ```json

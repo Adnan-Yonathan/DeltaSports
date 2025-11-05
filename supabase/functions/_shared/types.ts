@@ -77,6 +77,7 @@ export type CreatorProfile = {
   id: string;
   handle: string;
   display_name: string;
+  auth_user_id: string;
   avatar_url: string | null;
   bio: string | null;
   specialties: string[] | null;
@@ -142,7 +143,7 @@ export interface Database {
       };
       creator_profiles: {
         Row: CreatorProfile;
-        Insert: Partial<CreatorProfile> & { handle: string; display_name: string };
+        Insert: Partial<CreatorProfile> & { handle: string; display_name: string; auth_user_id: string };
         Update: Partial<CreatorProfile>;
         Relationships: [];
       };

@@ -2,6 +2,9 @@
 
 Validates a creator submission, saves it to `creator_posts`, and fan-outs notifications for every active subscriber.
 
+- Requires an `Authorization: Bearer <access_token>` header for the authenticated creator.
+- Only the creator who owns the profile (via `auth_user_id`) can publish through this endpoint.
+
 ## Request
 
 ```json

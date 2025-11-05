@@ -116,10 +116,12 @@ create table if not exists public.creator_profiles (
   id uuid primary key default gen_random_uuid(),
   handle text not null unique,
   display_name text not null,
+  auth_user_id uuid not null references auth.users (id) on delete cascade,
   avatar_url text,
   bio text,
   specialties text[] default array[]::text[],
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (auth_user_id)
 );
 
 -- Posts that populate the creator feed

@@ -6,23 +6,23 @@ const featureHighlights = [
     description:
       "Chat-first command center delivering bankroll summaries, creator alerts, and live market movers in one stream.",
     cta: "Preview the chat flow",
-    href: "#chat-flow"
+    hash: "chat-flow"
   },
   {
     title: "Bankroll Intelligence",
     description:
       "Track bets via manual or NLP input, surface ROI analytics, streaks, and behavioral tags to refine strategy.",
     cta: "View analytics",
-    href: "#bankroll"
+    hash: "bankroll"
   },
   {
     title: "Edge Scanner",
     description:
       "Aggregate multi-book odds, calculate EV, and push edge cards when discrepancies emerge in your markets.",
     cta: "See live edges",
-    href: "#edges"
+    hash: "edges"
   }
-];
+] as const;
 
 const integrations = [
   { name: "Vercel", detail: "Instant deploy previews for every branch." },
@@ -48,7 +48,10 @@ export default function HomePage() {
             <article key={feature.title} className="rounded-xl border border-white/5 bg-black/20 p-6">
               <h3 className="text-xl font-semibold text-white">{feature.title}</h3>
               <p className="mt-2 text-sm text-slate-300">{feature.description}</p>
-              <Link className="mt-4 inline-flex text-sm font-medium text-brand-accent" href={feature.href}>
+              <Link
+                className="mt-4 inline-flex text-sm font-medium text-brand-accent"
+                href={{ pathname: "/", hash: feature.hash }}
+              >
                 {feature.cta}
               </Link>
             </article>

@@ -1,0 +1,5 @@
+{
+  "installCommand": "sh -c 'if [ -d web ]; then cd web; fi; npm install'",
+  "buildCommand": "sh -c 'if [ -d web ]; then cd web; fi; npm run build'",
+  "framework": "nextjs"
+}

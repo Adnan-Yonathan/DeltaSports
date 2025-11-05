@@ -1,0 +1,14 @@
+{
+  "tone": "engaging",
+  "markets": [
+    {
+      "eventId": "nba-001",
+      "market": "Lakers @ Warriors - Spread",
+      "consensusDecimalOdds": 1.91,
+      "books": [
+        { "sportsbook": "BookA", "decimalOdds": 2.05 },
+        { "sportsbook": "BookB", "decimalOdds": 1.88 }
+      ]
+    }
+  ]
+}

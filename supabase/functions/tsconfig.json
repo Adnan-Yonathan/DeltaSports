@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "./",
+    "outDir": "./dist",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "edge-alerts-ack/normalize-action.ts",
+    "edge-alerts-dispatch/messages.ts",
+    "shared/database.types.ts",
+    "shared/types.ts"
+  ]
+}

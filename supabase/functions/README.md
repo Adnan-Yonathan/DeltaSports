@@ -53,6 +53,28 @@ Client-facing keys remain in `web/.env.example`; only privileged keys are loaded
    ```
 3. Use the JSON payloads documented inside each function folder (`README.md`) to exercise the endpoints.
 
+### Regenerating database types
+
+The edge functions share generated Supabase types at `shared/database.types.ts`. Refresh the artifact whenever the database schema changes:
+
+```bash
+cd supabase
+supabase gen types typescript --linked \
+  --schema public \
+  --output functions/shared/database.types.ts
+```
+
+Alternatively, with the npm distribution of the CLI:
+
+```bash
+cd supabase
+npx supabase@latest gen types typescript --linked \
+  --schema public \
+  --output functions/shared/database.types.ts
+```
+
+Commit the updated `database.types.ts` file so other functions stay in sync.
+
 ## Scheduling & observability
 
 - **EV scanner:** schedule `ev-scanner-refresh` every 10 minutes (`supabase functions schedule new ... --cron "*/10 * * * *"`). Logs include refresh summaries plus any feed failures.

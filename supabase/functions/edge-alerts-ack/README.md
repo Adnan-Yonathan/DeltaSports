@@ -2,6 +2,9 @@
 
 Acknowledgment webhook invoked by the chat hub or mobile clients when a bettor consumes an edge alert.
 
+- Requires an `Authorization: Bearer <access_token>` header for the bettor acknowledging the alert.
+- The bettor must own the alert in order to resolve it; global alerts can only be acknowledged for logging purposes.
+
 ## Example
 
 ```json

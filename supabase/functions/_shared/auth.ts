@@ -1,4 +1,6 @@
+import { createServiceRoleClient } from "./client.ts";
 import { requireEnv } from "./env.ts";
+import type { User } from "https://esm.sh/@supabase/supabase-js@2";
 
 export class UnauthorizedError extends Error {
   status = 401;
@@ -41,4 +43,30 @@ export function requireSecret(
   }
 
   throw new UnauthorizedError();
+}
+
+function getAccessToken(req: Request): string | null {
+  const headerNames = ["authorization", "x-supabase-auth"];
+  for (const headerName of headerNames) {
+    const token = extractToken(req.headers.get(headerName));
+    if (token) {
+      return token;
+    }
+  }
+  return null;
+}
+
+export async function requireUser(req: Request): Promise<User> {
+  const accessToken = getAccessToken(req);
+  if (!accessToken) {
+    throw new UnauthorizedError("Missing access token");
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase.auth.getUser(accessToken);
+  if (error || !data?.user) {
+    throw new UnauthorizedError("Invalid access token");
+  }
+
+  return data.user;
 }

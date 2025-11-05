@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../_shared/client.ts";
-import { requireSecret, UnauthorizedError } from "../_shared/auth.ts";
+import { requireUser, UnauthorizedError } from "../_shared/auth.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
 import type {
   CreatorPost,
@@ -31,15 +31,20 @@ type Notification = {
 async function fetchCreator(
   supabase: ReturnType<typeof createServiceRoleClient>,
   payload: PublishPayload,
+  authUserId: string,
 ): Promise<CreatorProfile> {
   if (payload.creatorId) {
     const { data, error } = await supabase
       .from("creator_profiles")
       .select("*")
       .eq("id", payload.creatorId)
-      .single();
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
     if (error) {
       throw new Error(`Failed to load creator: ${error.message}`);
+    }
+    if (!data) {
+      throw new Error("Creator not found or unauthorized");
     }
     return data as CreatorProfile;
   }
@@ -47,11 +52,16 @@ async function fetchCreator(
     const { data, error } = await supabase
       .from("creator_profiles")
       .select("*")
-      .ilike("handle", payload.creatorHandle);
-    if (error || !data || data.length === 0) {
-      throw new Error(`Creator handle ${payload.creatorHandle} not found`);
+      .ilike("handle", payload.creatorHandle)
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`Failed to load creator: ${error.message}`);
     }
-    return data[0] as CreatorProfile;
+    if (!data) {
+      throw new Error("Creator not found or unauthorized");
+    }
+    return data as CreatorProfile;
   }
   throw new Error("creatorId or creatorHandle is required");
 }
@@ -118,13 +128,15 @@ serve(async (req) => {
     return errorResponse("Method not allowed", 405);
   }
 
+  let authUserId: string;
   try {
-    requireSecret(req, "CREATOR_FEED_PUBLISH_SECRET");
+    const user = await requireUser(req);
+    authUserId = user.id;
   } catch (error) {
     if (error instanceof UnauthorizedError) {
-      return errorResponse("Unauthorized", error.status);
+      return errorResponse(error.message, error.status);
     }
-    console.error("creator-feed-publish: failed to authorize request", error);
+    console.error("creator-feed-publish: failed to authenticate request", error);
     return errorResponse("Unauthorized", 401);
   }
 
@@ -139,11 +151,14 @@ serve(async (req) => {
   if (!payload.title || !payload.content) {
     return errorResponse("title and content are required", 400);
   }
+  if (!payload.creatorId && !payload.creatorHandle) {
+    return errorResponse("creatorId or creatorHandle is required", 400);
+  }
 
   const supabase = createServiceRoleClient();
 
   try {
-    const creator = await fetchCreator(supabase, payload);
+    const creator = await fetchCreator(supabase, payload, authUserId);
     const post = await insertPost(supabase, creator, payload);
     const subscriptions = await fetchActiveSubscriptions(supabase, creator.id);
 
@@ -159,10 +174,10 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("creator-feed-publish: failed to publish", error);
-    return errorResponse(
-      "Failed to publish creator update",
-      500,
-      error instanceof Error ? error.message : error,
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "Creator not found or unauthorized") {
+      return errorResponse("Forbidden", 403, message);
+    }
+    return errorResponse("Failed to publish creator update", 500, message);
   }
 });

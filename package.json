@@ -5,7 +5,7 @@
     "web"
   ],
   "scripts": {
-    "build": "npm run build --workspace web",
+    "build": "npm run build --workspace web && node scripts/sync-next-output.mjs",
     "dev": "npm run dev --workspace web",
     "start": "npm run start --workspace web",
     "lint": "npm run lint --workspace web",

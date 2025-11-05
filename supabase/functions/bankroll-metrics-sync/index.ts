@@ -10,7 +10,7 @@ type BetRecord = Database["public"]["Tables"]["bets"]["Row"];
 type BankrollAccount = Database["public"]["Tables"]["bankroll_accounts"]["Row"];
 type BetTag = Database["public"]["Tables"]["bet_tags"]["Row"];
 
-type SupabasePayload = {
+export type SupabasePayload = {
   type?: string;
   table?: string;
   record?: Partial<BetRecord> | null;
@@ -34,7 +34,7 @@ type MetricsSummary = {
   topTags: Array<{ tag: string; count: number }>;
 };
 
-function assertBetRecord(payload: SupabasePayload): BetRecord | null {
+export function extractBetRecord(payload: SupabasePayload): BetRecord | null {
   if (payload.table !== "bets") {
     return null;
   }
@@ -191,7 +191,10 @@ async function updateBankrollBalances(
   }
 }
 
-async function buildMetricsSummary(supabase: SupabaseClient, userId: string): Promise<MetricsSummary> {
+export async function processBankrollMetrics(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<MetricsSummary> {
   const [bankrolls, { bets, tags }] = await Promise.all([
     fetchUserBankrolls(supabase, userId),
     fetchUserBets(supabase, userId),
@@ -245,14 +248,14 @@ export const handler = async (req: Request): Promise<Response> => {
     return errorResponse("Invalid JSON payload", 400);
   }
 
-  const bet = assertBetRecord(payload);
+  const bet = extractBetRecord(payload);
   if (!bet) {
     return errorResponse("Unsupported payload", 400);
   }
 
   try {
     const supabase = createServiceRoleClient();
-    const metrics = await buildMetricsSummary(supabase, bet.user_id);
+    const metrics = await processBankrollMetrics(supabase, bet.user_id);
     return jsonResponse({ status: "ok", metrics });
   } catch (error) {
     console.error("bankroll-metrics-sync: failed to build metrics", error);

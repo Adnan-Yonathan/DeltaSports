@@ -1,7 +1,12 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../shared/client.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
-import type { AlertEvent, Database, EdgeAlert } from "../shared/types.ts";
+import type {
+  AlertEvent,
+  EdgeAlert,
+  TablesInsert,
+  TablesUpdate,
+} from "../shared/types.ts";
 import { normalizeAction } from "./normalize-action.ts";
 
 type AckPayload = {
@@ -17,7 +22,7 @@ async function logEvent(
   payload: AckPayload,
   alert: EdgeAlert,
 ) {
-  const eventPayload: Database["public"]["Tables"]["alert_events"]["Insert"] = {
+  const eventPayload: TablesInsert<"alert_events"> = {
     alert_id: alert.id,
     user_id: payload.userId ?? alert.user_id ?? null,
     action: normalizeAction(payload.action),
@@ -39,9 +44,13 @@ async function resolveAlert(
   supabase: ReturnType<typeof createServiceRoleClient>,
   alertId: string,
 ) {
+  const updatePayload: TablesUpdate<"edge_alerts"> = {
+    status: "acknowledged",
+    resolved_at: new Date().toISOString(),
+  };
   const { data, error } = await supabase
     .from("edge_alerts")
-    .update({ status: "acknowledged", resolved_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", alertId)
     .select()
     .single();

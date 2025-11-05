@@ -159,5 +159,23 @@ export interface Database {
         Relationships: [];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }
+
+export type Tables<TableName extends keyof Database["public"]["Tables"]> =
+  Database["public"]["Tables"][TableName];
+
+export type TablesRow<TableName extends keyof Database["public"]["Tables"]> =
+  Tables<TableName>["Row"];
+
+export type TablesInsert<
+  TableName extends keyof Database["public"]["Tables"],
+> = Tables<TableName>["Insert"];
+
+export type TablesUpdate<
+  TableName extends keyof Database["public"]["Tables"],
+> = Tables<TableName>["Update"];

@@ -1,7 +1,11 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../shared/client.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
-import type { Database, EdgeAlert } from "../shared/types.ts";
+import type {
+  EdgeAlert,
+  TablesInsert,
+  TablesUpdate,
+} from "../shared/types.ts";
 
 type SupabaseClient = ReturnType<typeof createServiceRoleClient>;
 
@@ -146,25 +150,28 @@ async function upsertEdgeAlert(
     throw new Error(`Failed to lookup existing alert: ${selectError.message}`);
   }
 
-  if (existing) {
+  const existingAlert = existing as EdgeAlert | null;
+
+  if (existingAlert) {
+    const updatePayload: TablesUpdate<"edge_alerts"> = {
+      edge_value: candidate.edgeValue,
+      trigger_threshold: threshold,
+      message,
+      resolved_at: null,
+    };
     const { data, error } = await supabase
       .from("edge_alerts")
-      .update({
-        edge_value: candidate.edgeValue,
-        trigger_threshold: threshold,
-        message,
-        resolved_at: null,
-      })
-      .eq("id", existing.id)
+      .update(updatePayload)
+      .eq("id", existingAlert.id)
       .select()
       .single();
     if (error) {
-      throw new Error(`Failed to update edge alert ${existing.id}: ${error.message}`);
+      throw new Error(`Failed to update edge alert ${existingAlert.id}: ${error.message}`);
     }
     return data as EdgeAlert;
   }
 
-  const insertPayload: Database["public"]["Tables"]["edge_alerts"]["Insert"] = {
+  const insertPayload: TablesInsert<"edge_alerts"> = {
     origin: "model",
     market: candidate.market,
     sportsbook: candidate.sportsbook,
@@ -200,14 +207,15 @@ async function recordRefreshEvent(
     true_probability: candidate.trueProbability,
     edge_value: candidate.edgeValue,
   };
+  const eventPayload: TablesInsert<"alert_events"> = {
+    alert_id: alert.id,
+    user_id: alert.user_id,
+    action: "refreshed",
+    metadata,
+  };
   const { error } = await supabase
     .from("alert_events")
-    .insert({
-      alert_id: alert.id,
-      user_id: alert.user_id,
-      action: "refreshed",
-      metadata,
-    });
+    .insert(eventPayload);
   if (error) {
     console.error("ev-scanner-refresh: failed to record refresh event", alert.id, error);
   }

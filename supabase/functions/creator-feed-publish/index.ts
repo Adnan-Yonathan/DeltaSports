@@ -5,7 +5,7 @@ import type {
   CreatorPost,
   CreatorProfile,
   CreatorSubscription,
-  Database,
+  TablesInsert,
 } from "../shared/types.ts";
 
 type PublishPayload = {
@@ -60,7 +60,7 @@ async function insertPost(
   creator: CreatorProfile,
   payload: PublishPayload,
 ): Promise<CreatorPost> {
-  const insertPayload: Database["public"]["Tables"]["creator_posts"]["Insert"] = {
+  const insertPayload: TablesInsert<"creator_posts"> = {
     creator_id: creator.id,
     title: payload.title,
     content: payload.content,

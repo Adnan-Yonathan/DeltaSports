@@ -1,7 +1,12 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../shared/client.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
-import type { AlertEvent, AlertOrigin, Database, EdgeAlert } from "../shared/types.ts";
+import type {
+  AlertEvent,
+  AlertOrigin,
+  EdgeAlert,
+  TablesInsert,
+} from "../shared/types.ts";
 import {
   buildAlertMessage,
   DEFAULT_TONE,
@@ -26,7 +31,7 @@ async function insertEdgeAlert(
   const triggerThreshold = alert.triggerThreshold ?? Math.max(alert.edgeValue, 0);
   const message = buildAlertMessage(alert, tone);
 
-  const insertPayload: Database["public"]["Tables"]["edge_alerts"]["Insert"] = {
+  const insertPayload: TablesInsert<"edge_alerts"> = {
     origin,
     market: alert.market,
     sportsbook: alert.sportsbook,
@@ -55,14 +60,15 @@ async function insertEdgeAlert(
     ...alert.metadata,
   } as AlertEvent["metadata"];
 
+  const eventPayload: TablesInsert<"alert_events"> = {
+    alert_id: record.id,
+    user_id: record.user_id,
+    action: "dispatched",
+    metadata,
+  };
   const { error: eventError } = await supabase
     .from("alert_events")
-    .insert({
-      alert_id: record.id,
-      user_id: record.user_id,
-      action: "dispatched",
-      metadata,
-    });
+    .insert(eventPayload);
   if (eventError) {
     console.error("edge-alerts-dispatch: failed to log dispatch event", record.id, eventError);
   }

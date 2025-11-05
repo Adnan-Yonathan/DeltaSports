@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../shared/client.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
-import type { Database } from "../shared/types.ts";
+import type { Database, TablesUpdate } from "../shared/types.ts";
 
 const DAYS_30 = 30;
 
@@ -177,9 +177,12 @@ async function updateBankrollBalances(
     if (Math.abs(recalculatedBalance - toNumber(account.current_balance)) < 0.01) {
       continue;
     }
+    const updatePayload: TablesUpdate<"bankroll_accounts"> = {
+      current_balance: recalculatedBalance,
+    };
     const { error } = await supabase
       .from("bankroll_accounts")
-      .update({ current_balance: recalculatedBalance })
+      .update(updatePayload)
       .eq("id", account.id)
       .eq("user_id", userId);
     if (error) {

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../shared/client.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../shared/response.ts";
-import type { Database } from "../shared/types.ts";
+import type { TablesInsert } from "../shared/types.ts";
 
 type RawMetadata = Record<string, unknown> | null | undefined;
 
@@ -22,7 +22,7 @@ type AuthWebhookPayload = {
   };
 };
 
-type ProfileInput = Database["public"]["Tables"]["user_profiles"]["Insert"];
+type ProfileInput = TablesInsert<"user_profiles">;
 
 const DEFAULT_TIMEZONE = "UTC";
 

@@ -6,7 +6,7 @@ import type {
   Bet,
   EdgeAlert,
   UserProfile,
-} from "../shared/types.ts";
+} from "../shared/database.types.ts";
 
 type DigestTone = "concise" | "engaging" | "analytical";
 

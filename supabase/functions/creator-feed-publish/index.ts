@@ -6,7 +6,7 @@ import type {
   CreatorProfile,
   CreatorSubscription,
   Database,
-} from "../shared/types.ts";
+} from "../shared/database.types.ts";
 
 type PublishPayload = {
   creatorId?: string;

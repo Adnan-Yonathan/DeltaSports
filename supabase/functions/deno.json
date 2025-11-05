@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@shared/": "./shared/"
+  },
+  "tasks": {
+    "check": "deno check ./bankroll-metrics-sync/index.ts ./chat-digest/index.ts ./creator-feed-publish/index.ts ./edge-alerts-ack/index.ts ./edge-alerts-dispatch/index.ts ./ev-scanner-refresh/index.ts ./on-auth-profile/index.ts"
+  }
+}

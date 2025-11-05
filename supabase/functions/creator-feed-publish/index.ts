@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createServiceRoleClient } from "../_shared/client.ts";
+import { requireSecret, UnauthorizedError } from "../_shared/auth.ts";
 import { emptyResponse, errorResponse, jsonResponse } from "../_shared/response.ts";
 import type {
   CreatorPost,
@@ -115,6 +116,16 @@ serve(async (req) => {
   }
   if (req.method !== "POST") {
     return errorResponse("Method not allowed", 405);
+  }
+
+  try {
+    requireSecret(req, "CREATOR_FEED_PUBLISH_SECRET");
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return errorResponse("Unauthorized", error.status);
+    }
+    console.error("creator-feed-publish: failed to authorize request", error);
+    return errorResponse("Unauthorized", 401);
   }
 
   let payload: PublishPayload;

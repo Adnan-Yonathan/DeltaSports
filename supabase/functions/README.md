@@ -14,6 +14,7 @@ supabase/functions/
   edge-alerts-ack/           # Record alert acknowledgements from clients
   edge-alerts-dispatch/      # Persist threshold-crossing alerts & fan out notifications
   ev-scanner-refresh/        # Poll odds feeds and update edge_alerts with EV snapshots
+  odds-assistant/            # Blend The Odds API data with bettor context for chat summaries
   on-auth-profile/           # Bootstrap bettor profiles from auth webhooks
 ```
 
@@ -25,6 +26,8 @@ All functions rely on the Supabase service role configuration plus feature-speci
 | --- | --- |
 | `SUPABASE_URL` | Project REST endpoint (required) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key used for server-side operations (required) |
+| `ODDS_API_KEY` | The Odds API key consumed by `odds-assistant` |
+| `OPENAI_API_KEY` | Server-side OpenAI key used by `odds-assistant` |
 | `ODDS_FEED_URLS` | Comma-separated odds feed URLs for `ev-scanner-refresh` (optional during manual testing) |
 | `EV_MIN_THRESHOLD` | Override for minimum EV percentage surfaced by `ev-scanner-refresh` |
 

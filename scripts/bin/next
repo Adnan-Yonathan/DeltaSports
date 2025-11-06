@@ -1,0 +1,39 @@
+#!/usr/bin/env node
+
+const { spawn } = require('node:child_process');
+const { resolve } = require('node:path');
+const { existsSync } = require('node:fs');
+
+const args = process.argv.slice(2);
+
+const repoRoot = resolve(__dirname, '..', '..');
+const workspaceDir = resolve(repoRoot, 'web');
+const nextBin = resolve(repoRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
+
+if (args[0] === 'export') {
+  const outDir = resolve(workspaceDir, 'out');
+  if (!existsSync(outDir)) {
+    console.warn(`Skipping deprecated \`next export\` CLI call; expected static output at ${outDir} was not found.`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+const child = spawn(process.execPath, [nextBin, ...args], {
+  cwd: process.cwd(),
+  env: process.env,
+  stdio: 'inherit'
+});
+
+child.on('exit', (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+  process.exit(code ?? 0);
+});
+
+child.on('error', (error) => {
+  console.error(error);
+  process.exit(1);
+});

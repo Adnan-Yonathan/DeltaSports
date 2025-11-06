@@ -13,6 +13,8 @@ import { simulateAssistantStream } from "./mockStream";
 import type { AssistantStreamPatch } from "./patch";
 import { persistStoredSession, readStoredSession } from "./storage";
 
+const chatMode = process.env.NEXT_PUBLIC_CHAT_MODE ?? "mock";
+
 type ChatSession = {
   id: string;
   createdAt: string;
@@ -418,90 +420,97 @@ export const useChatSession = () => {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const execute = async () => {
-        const start = performance.now();
+      const runSimulator = async () => {
         try {
-          const response = await fetch("/api/chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              prompt: trimmed,
-              conversation: conversationPayload,
-              sessionId: sessionRef.current.id,
-            }),
+          await simulateAssistantStream({
+            prompt: trimmed,
             signal: controller.signal,
+            onPatch: (patch) => applyPatch(assistantMessage.id, patch),
           });
-
-          if (response.ok && response.body) {
-            await readStream(response.body, (patch) => applyPatch(assistantMessage.id, patch), controller.signal);
-            applyPatch(assistantMessage.id, { status: "complete" });
-
-            return;
-          }
-
-          let errorMessage = "We couldn't complete that request. Try again shortly.";
-          let guardrailCode: string | null = null;
-          let retryAfterMs: number | null = null;
-
-          try {
-            const data = await response.json();
-            if (typeof data.error === "string" && data.error.trim().length > 0) {
-              errorMessage = data.error.trim();
-            }
-            if (typeof data.guardrail === "string") {
-              guardrailCode = data.guardrail;
-            }
-            if (typeof data.retryAfterMs === "number") {
-              retryAfterMs = data.retryAfterMs;
-            }
-          } catch (parseError) {
-            try {
-              const text = await response.text();
-              if (text.trim().length > 0) {
-                errorMessage = text.trim();
-              }
-            } catch {
-              // ignore secondary parsing errors
-            }
+          return true;
+        } catch (fallbackError) {
+          if (fallbackError instanceof DOMException && fallbackError.name === "AbortError") {
+            return true;
           }
 
           applyPatch(assistantMessage.id, {
             status: "error",
-            error: errorMessage,
+            error: "We couldn't complete that request. Try again shortly.",
           });
 
-          setLastError(errorMessage);
+          setLastError("We hit a snag while generating that response. Please try again.");
+          return false;
+        }
+      };
 
-          return;
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            return;
-          }
+      const execute = async () => {
+        try {
+          if (chatMode === "api") {
+            try {
+              const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  prompt: trimmed,
+                  conversation: conversationPayload,
+                  sessionId: sessionRef.current.id,
+                }),
+                signal: controller.signal,
+              });
 
-          if (process.env.NODE_ENV === "development") {
-            console.warn("Falling back to simulated assistant stream", error);
-          }
+              if (response.ok && response.body) {
+                await readStream(
+                  response.body,
+                  (patch) => applyPatch(assistantMessage.id, patch),
+                  controller.signal
+                );
+                applyPatch(assistantMessage.id, { status: "complete" });
+                return;
+              }
 
-          try {
-            const result = await simulateAssistantStream({
-              prompt: trimmed,
-              signal: controller.signal,
-              onPatch: (patch) => applyPatch(assistantMessage.id, patch),
-            });
+              const handled = await runSimulator();
+              if (handled) {
+                return;
+              }
 
-          } catch (fallbackError) {
-            if (fallbackError instanceof DOMException && fallbackError.name === "AbortError") {
+              let errorMessage = "We couldn't complete that request. Try again shortly.";
+
+              try {
+                const data = await response.json();
+                if (typeof data.error === "string" && data.error.trim().length > 0) {
+                  errorMessage = data.error.trim();
+                }
+              } catch (parseError) {
+                try {
+                  const text = await response.text();
+                  if (text.trim().length > 0) {
+                    errorMessage = text.trim();
+                  }
+                } catch {
+                  // ignore secondary parsing errors
+                }
+              }
+
+              setLastError(errorMessage);
               return;
+            } catch (error) {
+              if (error instanceof DOMException && error.name === "AbortError") {
+                return;
+              }
+
+              if (process.env.NODE_ENV === "development") {
+                console.warn("Falling back to simulated assistant stream", error);
+              }
+
+              const handled = await runSimulator();
+              if (handled) {
+                return;
+              }
             }
-
-            applyPatch(assistantMessage.id, {
-              status: "error",
-              error: "We couldn't complete that request. Try again shortly.",
-            });
-
-            setLastError("We hit a snag while generating that response. Please try again.");
+          } else {
+            await runSimulator();
           }
         } finally {
           finishStreaming();

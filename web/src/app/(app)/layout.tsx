@@ -1,10 +1,17 @@
 import { Sidebar } from "@/components/chat/Sidebar";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <section className="flex h-full w-full gap-6">
-      <Sidebar />
+      <Suspense
+        fallback={
+          <aside className="hidden w-full max-w-xs rounded-2xl border border-white/5 bg-black/30 lg:flex" />
+        }
+      >
+        <Sidebar />
+      </Suspense>
       <div className="flex w-full flex-1 flex-col overflow-hidden rounded-2xl border border-white/5 bg-black/40">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-black/60 px-6 py-4">
           <div>

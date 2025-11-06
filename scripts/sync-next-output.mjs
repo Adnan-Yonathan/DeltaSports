@@ -1,9 +1,12 @@
 import { cp, rm, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 async function main() {
-  const src = resolve('web', '.next');
-  const dest = resolve('.next');
+  const scriptDir = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(scriptDir, '..');
+  const src = resolve(repoRoot, 'web', '.next');
+  const dest = resolve(repoRoot, '.next');
 
   try {
     await stat(src);

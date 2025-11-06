@@ -7,6 +7,6 @@
     }
   ],
   "installCommand": "npm install",
-  "buildCommand": "npm run build --workspace web",
-  "devCommand": "npm run dev --workspace web"
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev"
 }

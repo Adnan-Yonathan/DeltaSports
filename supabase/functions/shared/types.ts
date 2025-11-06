@@ -8,6 +8,28 @@ export type UserProfile = {
   updated_at: string;
 };
 
+export type ChatSession = {
+  id: string;
+  user_id: string;
+  title: string;
+  last_message_preview: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatMessageRole = "user" | "assistant" | "system";
+
+export type ChatMessage = {
+  id: string;
+  session_id: string;
+  role: ChatMessageRole;
+  content: Record<string, unknown>;
+  status: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BankrollAccount = {
   id: string;
   user_id: string;
@@ -108,6 +130,18 @@ export interface Database {
         Row: UserProfile;
         Insert: Partial<UserProfile> & { auth_user_id: string };
         Update: Partial<UserProfile>;
+        Relationships: [];
+      };
+      chat_sessions: {
+        Row: ChatSession;
+        Insert: Partial<ChatSession> & { user_id: string };
+        Update: Partial<ChatSession>;
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: ChatMessage;
+        Insert: Partial<ChatMessage> & { session_id: string; role: ChatMessageRole };
+        Update: Partial<ChatMessage>;
         Relationships: [];
       };
       bankroll_accounts: {

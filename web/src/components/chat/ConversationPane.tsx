@@ -1,11 +1,13 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import type { OddsFormat, QuickPrompt } from "./types";
 import { useChatSession } from "@/lib/chat/useChatSession";
+import { useSessionContext } from "@/components/providers/SessionProvider";
 
 const quickPrompts: readonly QuickPrompt[] = [
   {
@@ -49,11 +51,18 @@ const marketOptions = [
 ] as const;
 
 export function ConversationPane() {
+  const searchParams = useSearchParams();
+  const { chatSessions } = useSessionContext();
   const [composerValue, setComposerValue] = useState("");
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>("american");
   const [selectedSportKey, setSelectedSportKey] = useState<string>(sportOptions[0]?.value ?? "basketball_nba");
   const [selectedMarketKey, setSelectedMarketKey] = useState<string>(marketOptions[0]?.value ?? "h2h");
-  const { messages, isStreaming, sendPrompt, hasAssistantResponse, lastError, clearError } = useChatSession();
+  const activeChatParam = searchParams?.get("chat");
+  const fallbackSessionId = chatSessions[0]?.id ?? null;
+  const activeSessionId = activeChatParam ?? fallbackSessionId;
+  const { messages, isStreaming, sendPrompt, hasAssistantResponse, lastError, clearError } = useChatSession({
+    sessionId: activeSessionId,
+  });
 
   const handleComposerSubmit = useCallback(
     ({ prompt, quickPromptId }: { prompt: string; quickPromptId?: string }) => {

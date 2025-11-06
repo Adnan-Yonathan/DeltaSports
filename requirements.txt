@@ -1,0 +1,3 @@
+# Python dependencies for analytics instrumentation and tooling
+posthog
+openai

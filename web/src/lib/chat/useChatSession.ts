@@ -1,0 +1,591 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import type {
+  AssistantMessage,
+  AssistantSection,
+  ConversationMessage,
+  UserMessage,
+} from "@/components/chat/types";
+import { captureClientEvent, getDistinctId } from "@/lib/analytics/posthog";
+
+import { simulateAssistantStream } from "./mockStream";
+import type { AssistantStreamPatch } from "./patch";
+import { persistStoredSession, readStoredSession } from "./storage";
+
+type ChatSession = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ConversationMessage[];
+  distinctId: string | null;
+};
+
+type SendPromptArgs = {
+  prompt: string;
+  quickPromptId?: string;
+};
+
+const timestampFormatter = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "America/New_York",
+});
+
+const formatTimestamp = (date: Date) => `${timestampFormatter.format(date)} ET`;
+
+const seedMessages: ConversationMessage[] = [
+  {
+    id: "user-seed",
+    role: "user",
+    content: "What are tonight's Knicks moneyline odds and any injury news I should know?",
+    createdAt: "5:29 PM ET",
+  },
+  {
+    id: "assistant-seed",
+    role: "assistant",
+    headline: "Short answer",
+    summary:
+      "Knicks sit at -134 (1.75 decimal / 3/4 fractional). Brunson probable, Randle ruled out, Celtics report no new limitations.",
+    createdAt: "5:30 PM ET",
+    odds: {
+      american: "-134",
+      decimal: "1.75",
+      fractional: "3/4",
+      impliedProbability: "57.3%",
+    },
+    sections: [
+      {
+        id: "key-stats",
+        title: "Key stats",
+        items: [
+          "NYK 7-3 in last 10 · Opp PPG allowed: 109.8",
+          "Celtics offense 118.5 rating over same stretch",
+        ],
+      },
+      {
+        id: "assumptions",
+        title: "Assumptions",
+        items: [
+          "Line captured at 5:45 PM ET from primary odds feed",
+          "Injury report refreshed 5:30 PM ET with league data",
+        ],
+      },
+      {
+        id: "timestamps",
+        title: "Timestamps",
+        items: [
+          "Odds API sync 2 minutes ago",
+          "Backup provider verified 90 seconds ago",
+        ],
+      },
+    ],
+    sources: [
+      { id: "odds-api", label: "Odds API" },
+      { id: "nba-injuries", label: "NBA.com injuries" },
+    ],
+    status: "complete",
+  },
+];
+
+const createId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const normalizeStoredMessages = (messages: readonly ConversationMessage[]): ConversationMessage[] =>
+  messages.map((message) => {
+    if (message.role === "assistant") {
+      return {
+        ...message,
+        status: message.status ?? "complete",
+      } satisfies AssistantMessage;
+    }
+
+    return message;
+  });
+
+const createInitialSession = (distinctId: string | null): ChatSession => {
+  const nowIso = new Date().toISOString();
+  return {
+    id: `session-${createId()}`,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    messages: [...seedMessages],
+    distinctId,
+  };
+};
+
+const mergeSections = (
+  existing: readonly AssistantSection[] | undefined,
+  incoming: readonly AssistantSection[] | undefined,
+  single?: AssistantSection
+): readonly AssistantSection[] | undefined => {
+  if (incoming) {
+    return [...incoming];
+  }
+
+  if (!single) {
+    return existing;
+  }
+
+  const current = existing ? [...existing] : [];
+  const index = current.findIndex((section) => section.id === single.id);
+  if (index >= 0) {
+    current[index] = single;
+    return current;
+  }
+
+  current.push(single);
+  return current;
+};
+
+const applyPatchToAssistant = (
+  message: AssistantMessage,
+  patch: AssistantStreamPatch
+): AssistantMessage => {
+  const summary =
+    patch.summary !== undefined
+      ? patch.summary
+      : patch.summaryDelta
+        ? `${message.summary ?? ""}${patch.summaryDelta}`
+        : message.summary;
+
+  const nextError =
+    patch.status === "error"
+      ? patch.error ?? message.error ?? "Assistant response unavailable."
+      : patch.error ?? message.error;
+
+  return {
+    ...message,
+    headline: patch.headline ?? message.headline,
+    summary,
+    odds: patch.odds ? { ...(message.odds ?? {}), ...patch.odds } : message.odds,
+    sections: mergeSections(message.sections, patch.sections, patch.section),
+    sources: patch.sources ?? message.sources,
+    status: patch.status ?? message.status ?? "draft",
+    error: nextError ?? undefined,
+  };
+};
+
+const parseStreamPayload = (line: string): AssistantStreamPatch | null => {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const sanitized = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
+  if (!sanitized) {
+    return null;
+  }
+
+  if (sanitized === "[DONE]") {
+    return { status: "complete" };
+  }
+
+  try {
+    const payload = JSON.parse(sanitized) as Record<string, unknown> & {
+      type?: string;
+    };
+
+    if (payload.type === "done") {
+      return { status: "complete" };
+    }
+
+    if (payload.type === "error") {
+      return {
+        status: "error",
+        error: typeof payload.message === "string" ? payload.message : undefined,
+      };
+    }
+
+    const patch: AssistantStreamPatch = {};
+
+    if (typeof payload.headline === "string") {
+      patch.headline = payload.headline;
+    }
+
+    if (typeof payload.summary === "string") {
+      patch.summary = payload.summary;
+    }
+
+    if (typeof payload.summaryDelta === "string") {
+      patch.summaryDelta = payload.summaryDelta;
+    }
+
+    if (payload.odds && typeof payload.odds === "object") {
+      patch.odds = payload.odds as AssistantMessage["odds"];
+    }
+
+    if (Array.isArray(payload.sections)) {
+      patch.sections = payload.sections as AssistantSection[];
+    }
+
+    if (payload.section && typeof payload.section === "object") {
+      patch.section = payload.section as AssistantSection;
+    }
+
+    if (Array.isArray(payload.sources)) {
+      patch.sources = payload.sources as AssistantMessage["sources"];
+    }
+
+    if (typeof payload.status === "string") {
+      patch.status = payload.status as AssistantMessage["status"];
+    }
+
+    if (typeof payload.error === "string") {
+      patch.error = payload.error;
+    }
+
+    return Object.keys(patch).length > 0 ? patch : null;
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Failed to parse chat stream payload", error, line);
+    }
+    return null;
+  }
+};
+
+const readStream = async (
+  stream: ReadableStream<Uint8Array>,
+  onPatch: (patch: AssistantStreamPatch) => void,
+  signal: AbortSignal
+) => {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    if (signal.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex !== -1) {
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      const patch = parseStreamPayload(line);
+      if (patch) {
+        onPatch(patch);
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
+
+  if (buffer.trim()) {
+    const patch = parseStreamPayload(buffer);
+    if (patch) {
+      onPatch(patch);
+    }
+  }
+};
+
+const toApiMessages = (messages: readonly ConversationMessage[]) =>
+  messages.map((message) => {
+    if (message.role === "assistant") {
+      return {
+        role: message.role,
+        headline: message.headline,
+        summary: message.summary,
+        odds: message.odds,
+        sections: message.sections,
+        sources: message.sources,
+        status: message.status,
+      };
+    }
+
+    return {
+      role: message.role,
+      content: message.content,
+    };
+  });
+
+export const useChatSession = () => {
+  const [session, setSession] = useState<ChatSession>(() => {
+    const stored = readStoredSession<ConversationMessage>();
+    if (stored) {
+      return {
+        ...stored,
+        messages: normalizeStoredMessages(stored.messages),
+      };
+    }
+
+    return createInitialSession(null);
+  });
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const sessionRef = useRef(session);
+  const streamingRef = useRef(isStreaming);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
+    streamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  useEffect(() => {
+    persistStoredSession(session);
+  }, [session]);
+
+  useEffect(() => {
+    if (session.distinctId) {
+      return;
+    }
+    const id = getDistinctId();
+    if (id) {
+      setSession((prev) => ({ ...prev, distinctId: id }));
+    }
+  }, [session.distinctId]);
+
+  const applyPatch = useCallback(
+    (assistantId: string, patch: AssistantStreamPatch) => {
+      setSession((prev) => {
+        const next: ChatSession = {
+          ...prev,
+          updatedAt: new Date().toISOString(),
+          messages: prev.messages.map((message) => {
+            if (message.id !== assistantId || message.role !== "assistant") {
+              return message;
+            }
+
+            return applyPatchToAssistant(message, patch);
+          }),
+        };
+
+        sessionRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
+
+  const finishStreaming = useCallback(() => {
+    setIsStreaming(false);
+    abortRef.current = null;
+  }, []);
+
+  const sendPrompt = useCallback(
+    ({ prompt, quickPromptId }: SendPromptArgs) => {
+      const trimmed = prompt.trim();
+      if (!trimmed || streamingRef.current) {
+        return;
+      }
+
+      const now = new Date();
+      const nowIso = now.toISOString();
+
+      const priorMessages = sessionRef.current.messages.length;
+      const assistantResponses = sessionRef.current.messages.filter((message) => message.role === "assistant").length;
+
+      const userMessage: UserMessage = {
+        id: `user-${createId()}`,
+        role: "user",
+        content: trimmed,
+        createdAt: formatTimestamp(now),
+      };
+
+      const assistantMessage: AssistantMessage = {
+        id: `assistant-${createId()}`,
+        role: "assistant",
+        createdAt: formatTimestamp(now),
+        headline: "Short answer",
+        summary: "",
+        odds: {},
+        sections: [],
+        sources: [],
+        status: "draft",
+      };
+
+      const nextSession: ChatSession = {
+        ...sessionRef.current,
+        updatedAt: nowIso,
+        messages: [...sessionRef.current.messages, userMessage, assistantMessage],
+      };
+
+      const conversationPayload = toApiMessages([
+        ...sessionRef.current.messages,
+        userMessage,
+      ]);
+
+      sessionRef.current = nextSession;
+      setSession(nextSession);
+
+      setIsStreaming(true);
+      setLastError(null);
+
+      if (quickPromptId) {
+        captureClientEvent("chat_quick_prompt_selected", {
+          quickPromptId,
+          promptLength: trimmed.length,
+          conversationDepth: priorMessages,
+        });
+      }
+
+      captureClientEvent("chat_prompt_submitted", {
+        promptLength: trimmed.length,
+        quickPromptId: quickPromptId ?? null,
+        conversationDepth: priorMessages,
+        assistantResponses,
+      });
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const execute = async () => {
+        const start = performance.now();
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              prompt: trimmed,
+              conversation: conversationPayload,
+              sessionId: sessionRef.current.id,
+              distinctId: sessionRef.current.distinctId,
+            }),
+            signal: controller.signal,
+          });
+
+          if (response.ok && response.body) {
+            await readStream(response.body, (patch) => applyPatch(assistantMessage.id, patch), controller.signal);
+            applyPatch(assistantMessage.id, { status: "complete" });
+
+            captureClientEvent("llm.answer.stream_completed", {
+              conversationDepth: priorMessages + 2,
+              quickPromptId: quickPromptId ?? null,
+              latencyMs: performance.now() - start,
+              transport: "network",
+            });
+            return;
+          }
+
+          let errorMessage = "We couldn't complete that request. Try again shortly.";
+          let guardrailCode: string | null = null;
+          let retryAfterMs: number | null = null;
+
+          try {
+            const data = await response.json();
+            if (typeof data.error === "string" && data.error.trim().length > 0) {
+              errorMessage = data.error.trim();
+            }
+            if (typeof data.guardrail === "string") {
+              guardrailCode = data.guardrail;
+            }
+            if (typeof data.retryAfterMs === "number") {
+              retryAfterMs = data.retryAfterMs;
+            }
+          } catch (parseError) {
+            try {
+              const text = await response.text();
+              if (text.trim().length > 0) {
+                errorMessage = text.trim();
+              }
+            } catch {
+              // ignore secondary parsing errors
+            }
+          }
+
+          applyPatch(assistantMessage.id, {
+            status: "error",
+            error: errorMessage,
+          });
+
+          setLastError(errorMessage);
+
+          captureClientEvent("llm.answer.stream_failed", {
+            conversationDepth: priorMessages + 2,
+            quickPromptId: quickPromptId ?? null,
+            httpStatus: response.status,
+            guardrail: guardrailCode,
+            retryAfterMs,
+          });
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return;
+          }
+
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Falling back to simulated assistant stream", error);
+          }
+
+          try {
+            const result = await simulateAssistantStream({
+              prompt: trimmed,
+              signal: controller.signal,
+              onPatch: (patch) => applyPatch(assistantMessage.id, patch),
+            });
+
+            captureClientEvent("llm.answer.stream_completed", {
+              conversationDepth: priorMessages + 2,
+              quickPromptId: quickPromptId ?? null,
+              latencyMs: result.latencyMs,
+              transport: result.transport,
+              fallback: true,
+            });
+          } catch (fallbackError) {
+            if (fallbackError instanceof DOMException && fallbackError.name === "AbortError") {
+              return;
+            }
+
+            applyPatch(assistantMessage.id, {
+              status: "error",
+              error: "We couldn't complete that request. Try again shortly.",
+            });
+
+            setLastError("We hit a snag while generating that response. Please try again.");
+
+            captureClientEvent("llm.answer.stream_failed", {
+              conversationDepth: priorMessages + 2,
+              quickPromptId: quickPromptId ?? null,
+            });
+          }
+        } finally {
+          finishStreaming();
+        }
+      };
+
+      void execute();
+    },
+    [applyPatch, finishStreaming]
+  );
+
+  useEffect(() => () => {
+    abortRef.current?.abort();
+  }, []);
+
+  const hasAssistantResponse = useMemo(
+    () => session.messages.some((message) => message.role === "assistant"),
+    [session.messages]
+  );
+
+  const clearError = useCallback(() => setLastError(null), []);
+
+  return {
+    messages: session.messages,
+    isStreaming,
+    sendPrompt,
+    sessionId: session.id,
+    distinctId: session.distinctId,
+    hasAssistantResponse,
+    lastError,
+    clearError,
+  } as const;
+};
+
+export type UseChatSessionReturn = ReturnType<typeof useChatSession>;

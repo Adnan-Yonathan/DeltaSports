@@ -25,7 +25,10 @@ export function MessageList({ messages, oddsFormat, isStreaming }: MessageListPr
   }, [messages, isStreaming]);
 
   return (
-    <div ref={containerRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-6 pb-32">
+    <div
+      ref={containerRef}
+      className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-40 pt-24 sm:px-6 md:px-10"
+    >
       {messages.map((message) => (
         <MessageBubble key={message.id} message={message} oddsFormat={oddsFormat} />
       ))}

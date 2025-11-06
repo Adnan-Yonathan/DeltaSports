@@ -70,55 +70,63 @@ export function ConversationPane() {
   const showErrorBanner = useMemo(() => Boolean(lastError), [lastError]);
 
   return (
-    <div className="relative flex h-full flex-1 flex-col overflow-hidden rounded-2xl border border-white/5 bg-black/40">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-black/60 px-6 py-4">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Live conversation stream</h3>
-          <p className="text-sm text-slate-300">
-            Streamed answers include short summaries, odds formats, and citation badges.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-          <span className="uppercase tracking-wide text-slate-400">Odds format</span>
-          <div className="flex overflow-hidden rounded-full border border-white/10 bg-white/5">
-            {oddsOptions.map((option) => (
+    <div className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(39,39,42,0.35)_0%,_transparent_65%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-36 bg-gradient-to-b from-black via-black/80 to-transparent"
+      />
+      <div className="relative z-20 flex flex-1 flex-col">
+        {showErrorBanner ? (
+          <div className="border-b border-red-500/40 bg-red-500/15 px-6 py-3 text-sm text-red-100">
+            <div className="flex items-start justify-between gap-4">
+              <span>{lastError}</span>
               <button
-                key={option.value}
                 type="button"
-                className={`px-3 py-1 font-medium transition ${
-                  oddsFormat === option.value
-                    ? "bg-brand-accent text-black"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-                aria-pressed={oddsFormat === option.value}
-                onClick={() => handleOddsFormatChange(option.value)}
+                className="text-xs font-semibold uppercase tracking-wide text-red-200/70 hover:text-red-100"
+                onClick={clearError}
               >
-                {option.label}
+                Dismiss
               </button>
-            ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="pointer-events-none absolute right-4 top-4 flex max-w-full justify-end pr-2 sm:right-6 sm:top-6">
+          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-3 py-1 text-[11px] text-slate-200 shadow-lg backdrop-blur">
+            <span className="uppercase tracking-wide text-slate-400">Odds</span>
+            <div className="flex items-center gap-1">
+              {oddsOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`rounded-full px-2 py-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
+                    oddsFormat === option.value
+                      ? "bg-brand-accent/90 text-black"
+                      : "text-slate-200/80 hover:text-white"
+                  }`}
+                  aria-pressed={oddsFormat === option.value}
+                  onClick={() => handleOddsFormatChange(option.value)}
+                >
+                  {option.label.slice(0, 3).toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </header>
-      {showErrorBanner ? (
-        <div className="border-b border-red-500/40 bg-red-500/10 px-6 py-3 text-sm text-red-200">
-          <div className="flex items-start justify-between gap-4">
-            <span>{lastError}</span>
-            <button
-              type="button"
-              className="text-xs font-semibold uppercase tracking-wide text-red-200/70 hover:text-red-100"
-              onClick={clearError}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      ) : null}
-      <MessageList messages={messages} oddsFormat={oddsFormat} isStreaming={isStreaming} />
-      <div className="sticky bottom-0 space-y-3 bg-gradient-to-t from-black via-black/90 to-transparent px-6 pb-6 pt-4">
+        <MessageList messages={messages} oddsFormat={oddsFormat} isStreaming={isStreaming} />
+      </div>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-44 bg-gradient-to-t from-black via-black/85 to-transparent"
+      />
+      <div className="relative z-20 space-y-4 px-4 pb-6 pt-4 sm:px-6 md:px-10">
         {hasAssistantResponse ? (
-          <div className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-xs text-slate-300">
+          <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-xs text-slate-200 backdrop-blur">
             <p className="font-semibold uppercase tracking-wide text-white">Responsible betting reminder</p>
-            <p className="mt-1 text-slate-400">
+            <p className="mt-1 text-slate-300">
               Insights are informational and not guarantees. Always verify odds, respect your bankroll limits, and wager responsibly.
             </p>
           </div>

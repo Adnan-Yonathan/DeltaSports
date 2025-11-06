@@ -25,23 +25,23 @@ export function MessageBubble({ message, oddsFormat }: MessageBubbleProps) {
 
     return (
       <article
-        className={`flex w-full max-w-2xl flex-col gap-3 self-end rounded-2xl border px-4 py-4 text-sm text-slate-200 transition ${
+        className={`relative flex w-full max-w-2xl flex-col gap-4 self-end rounded-3xl border px-5 py-5 text-sm text-slate-100 shadow-[0_30px_60px_rgba(2,6,23,0.35)] transition backdrop-blur ${
           isError
-            ? "border-red-500/60 bg-red-500/10"
+            ? "border-red-500/50 bg-red-500/15"
             : "border-brand-accent/40 bg-brand-accent/10"
         }`}
       >
-        <header className="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-wide">
+        <header className="flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-wide text-slate-300">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-brand-accent">
               Assistant · {message.headline ?? "Response"}
             </span>
             {status !== "complete" ? (
               <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-[0.12em] ${
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-[0.14em] ${
                   isError
-                    ? "border-red-500/60 text-red-200"
-                    : "border-brand-accent/60 text-brand-accent"
+                    ? "border-red-500/60 text-red-100"
+                    : "border-brand-accent/70 text-brand-accent"
                 }`}
               >
                 {isError ? "Error" : "Streaming"}
@@ -72,7 +72,7 @@ export function MessageBubble({ message, oddsFormat }: MessageBubbleProps) {
             {message.error ?? "We couldn't complete that request."}
           </div>
         ) : (
-          <p className={`text-base text-slate-100 ${isDraft && !message.summary ? "animate-pulse text-slate-400" : ""}`}>
+          <p className={`text-base leading-relaxed text-slate-100 ${isDraft && !message.summary ? "animate-pulse text-slate-400" : ""}`}>
             {message.summary && message.summary.trim().length > 0
               ? message.summary
               : isDraft
@@ -81,7 +81,7 @@ export function MessageBubble({ message, oddsFormat }: MessageBubbleProps) {
           </p>
         )}
         {sections.length > 0 ? (
-          <div className="grid gap-3 rounded-2xl bg-black/40 p-4 text-xs text-slate-300 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-2xl bg-black/30 p-4 text-xs text-slate-300 sm:grid-cols-2">
             {sections.map((section) => (
               <section key={section.id} className="space-y-1">
                 <h4 className="font-semibold text-white">{section.title}</h4>
@@ -118,12 +118,12 @@ export function MessageBubble({ message, oddsFormat }: MessageBubbleProps) {
   }
 
   return (
-    <article className="flex max-w-xl flex-col gap-2 self-start rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-      <header className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+    <article className="flex max-w-xl flex-col gap-3 self-start rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-sm text-slate-200 shadow-[0_20px_40px_rgba(15,23,42,0.35)]">
+      <header className="flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-400">
         <span className="font-semibold text-white">You</span>
         <span>{message.createdAt}</span>
       </header>
-      <p className="text-sm text-slate-100">{message.content}</p>
+      <p className="text-sm leading-relaxed text-slate-100">{message.content}</p>
     </article>
   );
 }

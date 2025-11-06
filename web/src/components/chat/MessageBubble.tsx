@@ -22,6 +22,7 @@ export function MessageBubble({ message, oddsFormat }: MessageBubbleProps) {
     const impliedProbability = message.odds?.impliedProbability;
     const sections = message.sections ?? [];
     const sources = message.sources ?? [];
+    const warnings = message.warnings ?? [];
 
     return (
       <article
@@ -80,6 +81,16 @@ export function MessageBubble({ message, oddsFormat }: MessageBubbleProps) {
                 : "Awaiting summary."}
           </p>
         )}
+        {warnings.length > 0 ? (
+          <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+            <p className="font-semibold uppercase tracking-wide text-amber-200">Warnings</p>
+            <ul className="mt-2 space-y-1 text-amber-100">
+              {warnings.map((warning, index) => (
+                <li key={`${warning}-${index}`}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {sections.length > 0 ? (
           <div className="grid gap-3 rounded-2xl bg-black/30 p-4 text-xs text-slate-300 sm:grid-cols-2">
             {sections.map((section) => (

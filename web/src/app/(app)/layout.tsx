@@ -1,8 +1,53 @@
-import { Sidebar } from "@/components/chat/Sidebar";
-import type { ReactNode } from "react";
-import { Suspense } from "react";
+'use client';
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+import { Sidebar } from '@/components/chat/Sidebar';
+import { useSupabaseAuth } from '@/components/auth/SupabaseAuthProvider';
+import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo } from 'react';
+
+function CommandCenterGuard({ children }: { children: ReactNode }) {
+  const { session, loading, signOut } = useSupabaseAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !session) {
+      router.replace('/sign-in');
+    }
+  }, [loading, router, session]);
+
+  const handleSignOut = useCallback(async () => {
+    const { error } = await signOut();
+    if (error) {
+      console.error('Error during sign out', error);
+      return;
+    }
+
+    router.replace('/sign-in');
+  }, [router, signOut]);
+
+  const userEmail = useMemo(() => {
+    if (!session) {
+      return 'Account';
+    }
+
+    const metadataEmail = session.user.user_metadata?.email;
+
+    return session.user.email ?? (typeof metadataEmail === 'string' ? metadataEmail : 'Account');
+  }, [session]);
+
+  if (loading) {
+    return (
+      <section className="flex h-full w-full items-center justify-center rounded-2xl border border-white/10 bg-black/40 text-sm text-slate-300">
+        Loading Command Center...
+      </section>
+    );
+  }
+
+  if (!session) {
+    return null;
+  }
+
   return (
     <section className="flex h-full w-full gap-6">
       <Suspense
@@ -50,10 +95,27 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <span className="uppercase tracking-wide">Last synced</span>
               <span className="text-sm font-medium text-white">2:45 PM ET</span>
             </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right text-xs text-slate-400">
+                <span className="block uppercase tracking-wide">Signed in</span>
+                <span className="text-sm font-medium text-white">{userEmail}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         </header>
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-6">{children}</div>
       </div>
     </section>
   );
+}
+
+export default function AppLayout({ children }: { children: ReactNode }) {
+  return <CommandCenterGuard>{children}</CommandCenterGuard>;
 }

@@ -1,0 +1,2 @@
+# This project currently has no Python tooling dependencies.
+# Add packages here if future scripts require them.

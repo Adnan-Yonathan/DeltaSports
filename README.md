@@ -18,4 +18,10 @@ The `web` directory contains the Next.js + Tailwind front-end configured for dep
 4. In Supabase, run the queries in [supabase/sql-prompts.md](supabase/sql-prompts.md) to scaffold the initial database schema before enabling Row Level Security policies.
 5. Configure the edge-function project by following the guidance in [supabase/functions/README.md](supabase/functions/README.md), then deploy `on-auth-profile` as the initial auth webhook to bootstrap bettor profiles.
 
+### Operations checklist
+1. Run `npm install` from the repository root to install the `web/` workspace dependencies before starting local development.
+2. Copy `web/.env.example` to `web/.env.local` and provide real Supabase and odds provider credentials so the chat API can reach live data sources.
+3. When rotating Supabase or odds provider keys, update the matching environment variables on Vercel and redeploy so the serverless runtime picks up the new values.
+4. Monitor `/api/chat` logs (locally or in Vercel) for guardrail warnings or throttling responses to ensure the conversational experience remains responsive during high-traffic events.
+
 > **Note:** Package installation may require network access which is unavailable in this environment, but the project structure is ready for local development.

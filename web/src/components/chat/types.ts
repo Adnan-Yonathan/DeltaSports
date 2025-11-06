@@ -38,6 +38,7 @@ export type AssistantMessage = BaseMessage & {
   odds?: AssistantOdds;
   sections?: readonly AssistantSection[];
   sources?: readonly SourceBadge[];
+  warnings?: readonly string[];
   status: AssistantStatus;
   error?: string;
 };

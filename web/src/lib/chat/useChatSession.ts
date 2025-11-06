@@ -13,7 +13,7 @@ import { simulateAssistantStream } from "./mockStream";
 import type { AssistantStreamPatch } from "./patch";
 import { persistStoredSession, readStoredSession } from "./storage";
 
-const chatMode = process.env.NEXT_PUBLIC_CHAT_MODE ?? "mock";
+const chatMode = process.env.NEXT_PUBLIC_CHAT_MODE ?? "api";
 
 type ChatSession = {
   id: string;
@@ -25,6 +25,8 @@ type ChatSession = {
 type SendPromptArgs = {
   prompt: string;
   quickPromptId?: string;
+  sportKey?: string;
+  marketKey?: string;
 };
 
 const timestampFormatter = new Intl.DateTimeFormat("en-US", {
@@ -165,6 +167,7 @@ const applyPatchToAssistant = (
     odds: patch.odds ? { ...(message.odds ?? {}), ...patch.odds } : message.odds,
     sections: mergeSections(message.sections, patch.sections, patch.section),
     sources: patch.sources ?? message.sources,
+    warnings: patch.warnings ? [...patch.warnings] : message.warnings,
     status: patch.status ?? message.status ?? "draft",
     error: nextError ?? undefined,
   };
@@ -229,6 +232,15 @@ const parseStreamPayload = (line: string): AssistantStreamPatch | null => {
 
     if (Array.isArray(payload.sources)) {
       patch.sources = payload.sources as AssistantMessage["sources"];
+    }
+
+    if (Array.isArray(payload.warnings)) {
+      const warnings = payload.warnings.filter((item): item is string => typeof item === "string");
+      if (warnings.length > 0) {
+        patch.warnings = warnings;
+      } else {
+        patch.warnings = [];
+      }
     }
 
     if (typeof payload.status === "string") {
@@ -299,6 +311,7 @@ const toApiMessages = (messages: readonly ConversationMessage[]) =>
         odds: message.odds,
         sections: message.sections,
         sources: message.sources,
+        warnings: message.warnings,
         status: message.status,
       };
     }
@@ -369,18 +382,19 @@ export const useChatSession = () => {
   }, []);
 
   const sendPrompt = useCallback(
-    ({ prompt, quickPromptId }: SendPromptArgs) => {
+    ({ prompt, quickPromptId, sportKey, marketKey }: SendPromptArgs) => {
       const trimmed = prompt.trim();
       if (!trimmed || streamingRef.current) {
         return;
       }
 
+      const normalizedSportKey =
+        typeof sportKey === "string" && sportKey.trim().length > 0 ? sportKey.trim() : undefined;
+      const normalizedMarketKey =
+        typeof marketKey === "string" && marketKey.trim().length > 0 ? marketKey.trim() : undefined;
+
       const now = new Date();
       const nowIso = now.toISOString();
-
-      const priorMessages = sessionRef.current.messages.length;
-      const assistantResponses = sessionRef.current.messages.filter((message) => message.role === "assistant").length;
-
       const userMessage: UserMessage = {
         id: `user-${createId()}`,
         role: "user",
@@ -397,6 +411,7 @@ export const useChatSession = () => {
         odds: {},
         sections: [],
         sources: [],
+        warnings: [],
         status: "draft",
       };
 
@@ -456,6 +471,9 @@ export const useChatSession = () => {
                   prompt: trimmed,
                   conversation: conversationPayload,
                   sessionId: sessionRef.current.id,
+                  sportKey: normalizedSportKey,
+                  marketKey: normalizedMarketKey,
+                  quickPromptId,
                 }),
                 signal: controller.signal,
               });

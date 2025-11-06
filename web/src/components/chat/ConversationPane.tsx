@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
@@ -34,9 +34,25 @@ const oddsOptions: readonly { value: OddsFormat; label: string }[] = [
   { value: "fractional", label: "Fractional" }
 ];
 
+const sportOptions = [
+  { value: "basketball_nba", label: "NBA" },
+  { value: "basketball_ncaab", label: "NCAA Basketball" },
+  { value: "football_nfl", label: "NFL" },
+  { value: "baseball_mlb", label: "MLB" },
+  { value: "hockey_nhl", label: "NHL" }
+] as const;
+
+const marketOptions = [
+  { value: "h2h", label: "Moneyline" },
+  { value: "spreads", label: "Spread" },
+  { value: "totals", label: "Total" }
+] as const;
+
 export function ConversationPane() {
   const [composerValue, setComposerValue] = useState("");
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>("american");
+  const [selectedSportKey, setSelectedSportKey] = useState<string>(sportOptions[0]?.value ?? "basketball_nba");
+  const [selectedMarketKey, setSelectedMarketKey] = useState<string>(marketOptions[0]?.value ?? "h2h");
   const { messages, isStreaming, sendPrompt, hasAssistantResponse, lastError, clearError } = useChatSession();
 
   const handleComposerSubmit = useCallback(
@@ -47,25 +63,30 @@ export function ConversationPane() {
       }
 
       setComposerValue("");
-      sendPrompt({ prompt: trimmed, quickPromptId });
+      sendPrompt({
+        prompt: trimmed,
+        quickPromptId,
+        sportKey: selectedSportKey,
+        marketKey: selectedMarketKey,
+      });
     },
-    [sendPrompt]
+    [selectedMarketKey, selectedSportKey, sendPrompt]
   );
 
   const handleOddsFormatChange = useCallback(
     (format: OddsFormat) => {
-      const assistantResponses = messages.filter((message) => message.role === "assistant").length;
-
-      setOddsFormat((current) => {
-        if (current === format) {
-          return current;
-        }
-
-        return format;
-      });
+      setOddsFormat((current) => (current === format ? current : format));
     },
-    [messages]
+    []
   );
+
+  const handleSportChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedSportKey(event.target.value);
+  }, []);
+
+  const handleMarketChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedMarketKey(event.target.value);
+  }, []);
 
   const showErrorBanner = useMemo(() => Boolean(lastError), [lastError]);
 
@@ -78,24 +99,57 @@ export function ConversationPane() {
             Streamed answers include short summaries, odds formats, and citation badges.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-          <span className="uppercase tracking-wide text-slate-400">Odds format</span>
-          <div className="flex overflow-hidden rounded-full border border-white/10 bg-white/5">
-            {oddsOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`px-3 py-1 font-medium transition ${
-                  oddsFormat === option.value
-                    ? "bg-brand-accent text-black"
-                    : "text-slate-200 hover:bg-white/10 hover:text-white"
-                }`}
-                aria-pressed={oddsFormat === option.value}
-                onClick={() => handleOddsFormatChange(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
+          <label className="flex flex-col gap-1 text-left">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sport</span>
+            <select
+              className="rounded-full border border-white/10 bg-black/70 px-3 py-1.5 text-xs font-medium text-white focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/50"
+              value={selectedSportKey}
+              onChange={handleSportChange}
+              disabled={isStreaming}
+            >
+              {sportOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-left">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Market</span>
+            <select
+              className="rounded-full border border-white/10 bg-black/70 px-3 py-1.5 text-xs font-medium text-white focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/50"
+              value={selectedMarketKey}
+              onChange={handleMarketChange}
+              disabled={isStreaming}
+            >
+              {marketOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Odds format</span>
+            <div className="flex overflow-hidden rounded-full border border-white/10 bg-white/5">
+              {oddsOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`px-3 py-1 font-medium transition ${
+                    oddsFormat === option.value
+                      ? "bg-brand-accent text-black"
+                      : "text-slate-200 hover:bg-white/10 hover:text-white"
+                  }`}
+                  aria-pressed={oddsFormat === option.value}
+                  onClick={() => handleOddsFormatChange(option.value)}
+                  disabled={isStreaming}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>

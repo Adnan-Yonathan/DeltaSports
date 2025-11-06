@@ -6,7 +6,7 @@ async function main() {
   const scriptDir = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(scriptDir, '..');
   const src = resolve(repoRoot, 'web', 'out');
-  const dest = resolve(repoRoot, '.next');
+  const dest = resolve(repoRoot, 'web', '.next');
 
   try {
     await stat(src);
@@ -16,6 +16,7 @@ async function main() {
   }
 
   await rm(dest, { recursive: true, force: true });
+  console.log(`Removed existing contents at ${dest}.`);
   await cp(src, dest, { recursive: true });
   console.log(`Copied Next.js build output from ${src} to ${dest}.`);
 }

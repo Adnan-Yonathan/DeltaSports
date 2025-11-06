@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@posthog/ai": "0.2.5",
     "@supabase/supabase-js": "^2.45.0",
     "next": "14.2.3",
     "react": "18.3.1",

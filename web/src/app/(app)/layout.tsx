@@ -1,8 +1,12 @@
 import { Sidebar } from "@/components/chat/Sidebar";
 import { SessionProvider } from "@/components/providers/SessionProvider";
-import { createServerSupabaseClient, getServerSupabaseSession } from "@/lib/supabase/server";
+import {
+  createServerSupabaseClient,
+  getServerSupabaseSession,
+  isServerSupabaseConfigured,
+} from "@/lib/supabase/server";
 import type { SidebarChatSession } from "@/types/chat";
-import type { TablesRow } from "@/types/supabase";
+import type { TablesInsert, TablesRow } from "@/types/supabase";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
@@ -29,37 +33,39 @@ const ensureProfile = async (
   supabase: ReturnType<typeof createServerSupabaseClient>,
   authUserId: string
 ): Promise<TablesRow<"user_profiles"> | null> => {
-  const { data: existingProfile, error: profileError } = await supabase
+  const existingProfileResult = await supabase
     .from("user_profiles")
     .select("*")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
-  if (profileError) {
+  if (existingProfileResult.error) {
     if (process.env.NODE_ENV === "development") {
-      console.warn("Failed to load user profile", profileError);
+      console.warn("Failed to load user profile", existingProfileResult.error);
     }
     return null;
   }
 
-  if (existingProfile) {
-    return existingProfile;
+  if (existingProfileResult.data) {
+    return existingProfileResult.data as TablesRow<"user_profiles">;
   }
 
-  const { data: createdProfile, error: insertError } = await supabase
+  const profileInsert: TablesInsert<"user_profiles"> = { auth_user_id: authUserId };
+
+  const createdProfileResult = await supabase
     .from("user_profiles")
-    .insert({ auth_user_id: authUserId })
+    .insert<TablesInsert<"user_profiles">>(profileInsert)
     .select("*")
     .single();
 
-  if (insertError) {
+  if (createdProfileResult.error) {
     if (process.env.NODE_ENV === "development") {
-      console.warn("Failed to seed user profile", insertError);
+      console.warn("Failed to seed user profile", createdProfileResult.error);
     }
     return null;
   }
 
-  return createdProfile;
+  return createdProfileResult.data as TablesRow<"user_profiles">;
 };
 
 const ensureDefaultChatSession = async (
@@ -78,13 +84,15 @@ const ensureDefaultChatSession = async (
   }
 
   const defaultPreview = "Ask about tonight's odds or injury news to start a session.";
+  const sessionInsert: TablesInsert<"chat_sessions"> = {
+    user_id: userId,
+    title: "New conversation",
+    last_message_preview: defaultPreview,
+  };
+
   const { data: newSession, error: insertError } = await supabase
     .from("chat_sessions")
-    .insert({
-      user_id: userId,
-      title: "New conversation",
-      last_message_preview: defaultPreview,
-    })
+    .insert<TablesInsert<"chat_sessions">>(sessionInsert)
     .select("id, title, last_message_preview, last_message_at, updated_at, created_at")
     .single();
 
@@ -105,11 +113,15 @@ type AppLayoutProps = {
 export default async function AppLayout({ children }: AppLayoutProps) {
   const { client: supabase, session } = await getServerSupabaseSession();
 
+  if (!isServerSupabaseConfigured) {
+    redirect("/sign-in");
+  }
+
   if (!session) {
     redirect("/sign-in");
   }
 
-  const profile = session ? await ensureProfile(supabase, session.user.id) : null;
+  const profile = await ensureProfile(supabase, session.user.id);
   const chatSessions = profile ? await ensureDefaultChatSession(supabase, profile.id) : [];
 
   const { data: lastAlertEvent } = profile

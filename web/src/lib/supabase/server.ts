@@ -3,18 +3,31 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/supabase";
 
-const getEnv = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+type SupabaseServerEnv = {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  isConfigured: boolean;
+};
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      "Supabase credentials are missing. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured."
+const resolveEnv = (): SupabaseServerEnv => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const isConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+  if (!isConfigured && process.env.NODE_ENV === "development") {
+    console.warn(
+      "Supabase credentials are missing. Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY for full functionality."
     );
   }
 
-  return { supabaseUrl, supabaseAnonKey } as const;
+  return {
+    supabaseUrl: supabaseUrl ?? "http://127.0.0.1:54321",
+    supabaseAnonKey: supabaseAnonKey ?? "public-anon-key",
+    isConfigured,
+  } satisfies SupabaseServerEnv;
 };
+
+const env = resolveEnv();
 
 const parseAccessToken = (value: string): string | null => {
   try {
@@ -43,6 +56,10 @@ const parseAccessToken = (value: string): string | null => {
 };
 
 const readAccessTokenFromCookies = (): string | null => {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return null;
+  }
+
   const store = cookies();
   const authCookie = store
     .getAll()
@@ -55,11 +72,12 @@ const readAccessTokenFromCookies = (): string | null => {
   return parseAccessToken(authCookie.value);
 };
 
-export const createServerSupabaseClient = (accessToken?: string | null): SupabaseClient<Database> => {
-  const { supabaseUrl, supabaseAnonKey } = getEnv();
+export const createServerSupabaseClient = (
+  accessToken?: string | null
+): SupabaseClient<Database, "public"> => {
   const token = accessToken ?? readAccessTokenFromCookies();
 
-  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createClient<Database, "public">(env.supabaseUrl, env.supabaseAnonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -77,16 +95,29 @@ export const createServerSupabaseClient = (accessToken?: string | null): Supabas
 
 export const getServerSupabaseSession = async () => {
   const client = createServerSupabaseClient();
-  const { data, error } = await client.auth.getSession();
-
-  if (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("Failed to load Supabase session", error);
-    }
+  if (!env.isConfigured) {
     return { client, session: null } as const;
   }
 
-  return { client, session: data.session } as const;
+  try {
+    const { data, error } = await client.auth.getSession();
+
+    if (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("Failed to load Supabase session", error);
+      }
+      return { client, session: null } as const;
+    }
+
+    return { client, session: data.session } as const;
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Supabase session request failed", error);
+    }
+    return { client, session: null } as const;
+  }
 };
 
-export type ServerSupabaseClient = SupabaseClient<Database>;
+export const isServerSupabaseConfigured = env.isConfigured;
+
+export type ServerSupabaseClient = SupabaseClient<Database, "public">;

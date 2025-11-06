@@ -46,21 +46,25 @@ export interface Database {
         Row: UserProfile;
         Insert: Partial<UserProfile> & { auth_user_id: string };
         Update: Partial<UserProfile>;
+        Relationships: [];
       };
       chat_sessions: {
         Row: ChatSession;
         Insert: Partial<ChatSession> & { user_id: string };
         Update: Partial<ChatSession>;
+        Relationships: [];
       };
       chat_messages: {
         Row: ChatMessage;
         Insert: Partial<ChatMessage> & { session_id: string; role: ChatMessageRole };
         Update: Partial<ChatMessage>;
+        Relationships: [];
       };
       alert_events: {
         Row: AlertEvent;
         Insert: Partial<AlertEvent> & { alert_id: string; action: string };
         Update: Partial<AlertEvent>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

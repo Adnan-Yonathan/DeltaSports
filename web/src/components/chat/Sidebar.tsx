@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { useSessionContext } from "@/components/providers/SessionProvider";
+import type { TablesInsert } from "@/types/supabase";
 
 const secondaryLinks = [
   { label: "Prompts", href: "/prompts" },
@@ -37,13 +38,15 @@ export function Sidebar() {
     setCreationError(null);
     setIsCreating(true);
     try {
+      const sessionInsert: TablesInsert<"chat_sessions"> = {
+        user_id: profile.id,
+        title: "New conversation",
+        last_message_preview: "Start by asking about the markets you follow most.",
+      };
+
       const { data, error } = await supabase
         .from("chat_sessions")
-        .insert({
-          user_id: profile.id,
-          title: "New conversation",
-          last_message_preview: "Start by asking about the markets you follow most.",
-        })
+        .insert<TablesInsert<"chat_sessions">>(sessionInsert)
         .select("id, title, last_message_preview, last_message_at, updated_at, created_at")
         .single();
 

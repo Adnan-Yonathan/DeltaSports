@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
-import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { getBrowserSupabaseClient, isBrowserSupabaseConfigured } from "@/lib/supabase/browser";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -20,6 +20,12 @@ export default function SignUpPage() {
       event.preventDefault();
       setError(null);
       setIsSubmitting(true);
+
+      if (!isBrowserSupabaseConfigured) {
+        setError("Supabase credentials are missing. Please configure the environment variables and try again.");
+        setIsSubmitting(false);
+        return;
+      }
 
       const { error: signUpError } = await supabase.auth.signUp({
         email,

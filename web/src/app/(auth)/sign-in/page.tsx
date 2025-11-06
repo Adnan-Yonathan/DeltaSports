@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 
-import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { getBrowserSupabaseClient, isBrowserSupabaseConfigured } from "@/lib/supabase/browser";
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = getBrowserSupabaseClient();
@@ -21,6 +22,12 @@ export default function SignInPage() {
       setError(null);
       setIsSubmitting(true);
 
+      if (!isBrowserSupabaseConfigured) {
+        setError("Supabase credentials are missing. Please configure the environment variables and try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -33,7 +40,13 @@ export default function SignInPage() {
       }
 
       const redirectTo = searchParams?.get("redirectedFrom") ?? "/dashboard";
-      router.replace(redirectTo);
+      const fallbackRoute: Route = "/dashboard";
+      const safeRedirect =
+        redirectTo && redirectTo.startsWith("/")
+          ? (redirectTo as Route)
+          : fallbackRoute;
+
+      router.replace(safeRedirect);
     },
     [email, password, router, searchParams, supabase.auth]
   );
@@ -87,5 +100,13 @@ export default function SignInPage() {
         </Link>
       </p>
     </form>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<p className="text-center text-sm text-slate-400">Loading sign-in…</p>}>
+      <SignInForm />
+    </Suspense>
   );
 }

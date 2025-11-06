@@ -4,29 +4,42 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/supabase";
 
-let browserClient: SupabaseClient<Database> | null = null;
+type SupabaseBrowserEnv = {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  isConfigured: boolean;
+};
 
-const getEnv = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const resolveEnv = (): SupabaseBrowserEnv => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const isConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      "Supabase credentials are missing. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured."
+  if (!isConfigured && process.env.NODE_ENV === "development") {
+    console.warn(
+      "Supabase credentials are missing. Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY for full functionality."
     );
   }
 
-  return { supabaseUrl, supabaseAnonKey } as const;
+  return {
+    supabaseUrl: supabaseUrl ?? "http://127.0.0.1:54321",
+    supabaseAnonKey: supabaseAnonKey ?? "public-anon-key",
+    isConfigured,
+  } satisfies SupabaseBrowserEnv;
 };
+
+const env = resolveEnv();
+
+let browserClient: SupabaseClient<Database, "public"> | null = null;
+
+export const isBrowserSupabaseConfigured = env.isConfigured;
 
 export const getBrowserSupabaseClient = () => {
   if (browserClient) {
     return browserClient;
   }
 
-  const { supabaseUrl, supabaseAnonKey } = getEnv();
-
-  browserClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  browserClient = createClient<Database, "public">(env.supabaseUrl, env.supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
@@ -38,4 +51,4 @@ export const getBrowserSupabaseClient = () => {
   return browserClient;
 };
 
-export type BrowserSupabaseClient = SupabaseClient<Database>;
+export type BrowserSupabaseClient = SupabaseClient<Database, "public">;

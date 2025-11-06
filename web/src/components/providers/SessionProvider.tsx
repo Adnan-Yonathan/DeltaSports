@@ -17,7 +17,11 @@ import type {
   RealtimePostgresUpdatePayload,
 } from "@supabase/supabase-js";
 
-import { getBrowserSupabaseClient, type BrowserSupabaseClient } from "@/lib/supabase/browser";
+import {
+  getBrowserSupabaseClient,
+  isBrowserSupabaseConfigured,
+  type BrowserSupabaseClient,
+} from "@/lib/supabase/browser";
 import type { SidebarChatSession } from "@/types/chat";
 import type { TablesRow } from "@/types/supabase";
 
@@ -143,23 +147,24 @@ export function SessionProvider({
   }, [profile, supabase]);
 
   const refreshProfile = useCallback(async () => {
-    if (!session) {
+    if (!session || !isBrowserSupabaseConfigured) {
       return;
     }
 
-    const { data, error } = await supabase
+    const response = await supabase
       .from("user_profiles")
       .select("*")
       .eq("auth_user_id", session.user.id)
       .maybeSingle();
 
-    if (!error) {
-      setProfile(data ?? null);
+    if (!response.error) {
+      const nextProfile = (response.data as TablesRow<"user_profiles"> | null) ?? null;
+      setProfile(nextProfile);
     }
   }, [session, supabase]);
 
   const refreshChatSessions = useCallback(async () => {
-    if (!profile) {
+    if (!profile || !isBrowserSupabaseConfigured) {
       return;
     }
 
@@ -171,7 +176,7 @@ export function SessionProvider({
       .order("created_at", { ascending: false });
 
     if (!error && data) {
-      setChatSessions(sortSessions(data));
+      setChatSessions(sortSessions(data as SidebarChatSession[]));
     }
   }, [profile, supabase]);
 

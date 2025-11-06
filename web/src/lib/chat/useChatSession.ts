@@ -10,6 +10,7 @@ import type {
 } from "@/components/chat/types";
 import { useSessionContext } from "@/components/providers/SessionProvider";
 import type { ChatMessageRow } from "@/types/chat";
+import type { TablesInsert } from "@/types/supabase";
 
 import { simulateAssistantStream } from "./mockStream";
 import type { AssistantStreamPatch } from "./patch";
@@ -481,7 +482,7 @@ export const useChatSession = ({ sessionId }: UseChatSessionOptions = {}) => {
 
         const { data: messageRows, error: messagesError } = await supabase
           .from("chat_messages")
-          .select("id, role, content, status, created_at, updated_at")
+          .select("id, session_id, role, content, status, created_at, updated_at")
           .eq("session_id", resolvedSessionId)
           .order("created_at", { ascending: true });
 
@@ -492,8 +493,9 @@ export const useChatSession = ({ sessionId }: UseChatSessionOptions = {}) => {
           return;
         }
 
-        const messages =
-          messageRows?.map((row) => mapRowToMessage(row, formatTimestamp)).filter(Boolean) ?? [];
+        const messages = (messageRows ?? [])
+          .map((row) => mapRowToMessage(row, formatTimestamp))
+          .filter((message): message is ConversationMessage => message !== null);
 
         if (!isMounted) {
           return;
@@ -664,26 +666,28 @@ export const useChatSession = ({ sessionId }: UseChatSessionOptions = {}) => {
       abortRef.current = controller;
 
       if (profile && isSessionPersisted) {
+        const messageInserts: TablesInsert<"chat_messages">[] = [
+          {
+            id: userMessage.id,
+            session_id: sessionIdValue,
+            role: "user",
+            content: { content: trimmed },
+            status: "complete",
+            created_at: nowIso,
+          },
+          {
+            id: assistantMessage.id,
+            session_id: sessionIdValue,
+            role: "assistant",
+            content: buildAssistantPayload(assistantMessage),
+            status: assistantMessage.status,
+            created_at: nowIso,
+          },
+        ];
+
         void supabase
           .from("chat_messages")
-          .insert([
-            {
-              id: userMessage.id,
-              session_id: sessionIdValue,
-              role: "user",
-              content: { content: trimmed },
-              status: "complete",
-              created_at: nowIso,
-            },
-            {
-              id: assistantMessage.id,
-              session_id: sessionIdValue,
-              role: "assistant",
-              content: buildAssistantPayload(assistantMessage),
-              status: assistantMessage.status,
-              created_at: nowIso,
-            },
-          ])
+          .insert<TablesInsert<"chat_messages">>(messageInserts)
           .select();
 
         void supabase

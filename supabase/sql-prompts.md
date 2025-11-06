@@ -79,7 +79,32 @@ create table if not exists public.bet_tags (
 );
 ```
 
-## 5. Edge Intelligence
+## 5. Chat Sessions & Messages
+```sql
+-- Persistent chat sessions tied to bettor profiles
+create table if not exists public.chat_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.user_profiles (id) on delete cascade,
+  title text not null default 'New session',
+  last_message_preview text,
+  last_message_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Streaming messages captured for each session
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.chat_sessions (id) on delete cascade,
+  role text not null check (role in ('user', 'assistant', 'system')),
+  content jsonb not null default '{}'::jsonb,
+  status text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+## 6. Edge Intelligence
 ```sql
 -- Alerts emitted from the value models or creators
 create table if not exists public.edge_alerts (
@@ -109,7 +134,7 @@ create table if not exists public.alert_events (
 );
 ```
 
-## 6. Creator Network
+## 7. Creator Network
 ```sql
 -- Registered creators that bettors can follow
 create table if not exists public.creator_profiles (
@@ -144,7 +169,7 @@ create table if not exists public.creator_subscriptions (
 );
 ```
 
-## 7. Utility Trigger
+## 8. Utility Trigger
 ```sql
 -- Keep updated_at columns current without manual writes
 create or replace function public.set_updated_at()
@@ -166,6 +191,60 @@ for each row execute procedure public.set_updated_at();
 create trigger bets_updated
 before update on public.bets
 for each row execute procedure public.set_updated_at();
+
+create trigger chat_sessions_updated
+before update on public.chat_sessions
+for each row execute procedure public.set_updated_at();
+
+create trigger chat_messages_updated
+before update on public.chat_messages
+for each row execute procedure public.set_updated_at();
+```
+
+## 9. Row Level Security templates
+```sql
+alter table public.chat_sessions enable row level security;
+alter table public.chat_messages enable row level security;
+
+create policy "Users manage their chat sessions" on public.chat_sessions
+  for all
+  using (
+    exists (
+      select 1
+      from public.user_profiles up
+      where up.id = chat_sessions.user_id
+        and up.auth_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.user_profiles up
+      where up.id = chat_sessions.user_id
+        and up.auth_user_id = auth.uid()
+    )
+  );
+
+create policy "Users access their chat messages" on public.chat_messages
+  for all
+  using (
+    exists (
+      select 1
+      from public.chat_sessions cs
+      join public.user_profiles up on up.id = cs.user_id
+      where cs.id = chat_messages.session_id
+        and up.auth_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.chat_sessions cs
+      join public.user_profiles up on up.id = cs.user_id
+      where cs.id = chat_messages.session_id
+        and up.auth_user_id = auth.uid()
+    )
+  );
 ```
 
 ---

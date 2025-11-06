@@ -8,12 +8,16 @@ import type {
   ConversationMessage,
   UserMessage,
 } from "@/components/chat/types";
+import { useSessionContext } from "@/components/providers/SessionProvider";
+import type { ChatMessageRow } from "@/types/chat";
 
 import { simulateAssistantStream } from "./mockStream";
 import type { AssistantStreamPatch } from "./patch";
 import { persistStoredSession, readStoredSession } from "./storage";
 
 const chatMode = process.env.NEXT_PUBLIC_CHAT_MODE ?? "api";
+
+const FALLBACK_TIMEZONE = "America/New_York";
 
 type ChatSession = {
   id: string;
@@ -29,67 +33,9 @@ type SendPromptArgs = {
   marketKey?: string;
 };
 
-const timestampFormatter = new Intl.DateTimeFormat("en-US", {
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "America/New_York",
-});
-
-const formatTimestamp = (date: Date) => `${timestampFormatter.format(date)} ET`;
-
-const seedMessages: ConversationMessage[] = [
-  {
-    id: "user-seed",
-    role: "user",
-    content: "What are tonight's Knicks moneyline odds and any injury news I should know?",
-    createdAt: "5:29 PM ET",
-  },
-  {
-    id: "assistant-seed",
-    role: "assistant",
-    headline: "Short answer",
-    summary:
-      "Knicks sit at -134 (1.75 decimal / 3/4 fractional). Brunson probable, Randle ruled out, Celtics report no new limitations.",
-    createdAt: "5:30 PM ET",
-    odds: {
-      american: "-134",
-      decimal: "1.75",
-      fractional: "3/4",
-      impliedProbability: "57.3%",
-    },
-    sections: [
-      {
-        id: "key-stats",
-        title: "Key stats",
-        items: [
-          "NYK 7-3 in last 10 · Opp PPG allowed: 109.8",
-          "Celtics offense 118.5 rating over same stretch",
-        ],
-      },
-      {
-        id: "assumptions",
-        title: "Assumptions",
-        items: [
-          "Line captured at 5:45 PM ET from primary odds feed",
-          "Injury report refreshed 5:30 PM ET with league data",
-        ],
-      },
-      {
-        id: "timestamps",
-        title: "Timestamps",
-        items: [
-          "Odds API sync 2 minutes ago",
-          "Backup provider verified 90 seconds ago",
-        ],
-      },
-    ],
-    sources: [
-      { id: "odds-api", label: "Odds API" },
-      { id: "nba-injuries", label: "NBA.com injuries" },
-    ],
-    status: "complete",
-  },
-];
+type UseChatSessionOptions = {
+  sessionId?: string | null;
+};
 
 const createId = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -98,27 +44,85 @@ const createId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const createInitialSession = (formatTimestamp: (date: Date) => string): ChatSession => {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  return {
+    id: `session-${createId()}`,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    messages: [
+      {
+        id: "user-seed",
+        role: "user",
+        content: "What are tonight's Knicks moneyline odds and any injury news I should know?",
+        createdAt: formatTimestamp(now),
+      },
+      {
+        id: "assistant-seed",
+        role: "assistant",
+        headline: "Short answer",
+        summary:
+          "Knicks sit at -134 (1.75 decimal / 3/4 fractional). Brunson probable, Randle ruled out, Celtics report no new limitations.",
+        createdAt: formatTimestamp(now),
+        odds: {
+          american: "-134",
+          decimal: "1.75",
+          fractional: "3/4",
+          impliedProbability: "57.3%",
+        },
+        sections: [
+          {
+            id: "key-stats",
+            title: "Key stats",
+            items: [
+              "NYK 7-3 in last 10 · Opp PPG allowed: 109.8",
+              "Celtics offense 118.5 rating over same stretch",
+            ],
+          },
+          {
+            id: "assumptions",
+            title: "Assumptions",
+            items: [
+              "Line captured at 5:45 PM ET from primary odds feed",
+              "Injury report refreshed 5:30 PM ET with league data",
+            ],
+          },
+          {
+            id: "timestamps",
+            title: "Timestamps",
+            items: [
+              "Odds API sync 2 minutes ago",
+              "Backup provider verified 90 seconds ago",
+            ],
+          },
+        ],
+        sources: [
+          { id: "odds-api", label: "Odds API" },
+          { id: "nba-injuries", label: "NBA.com injuries" },
+        ],
+        warnings: [],
+        status: "complete",
+      },
+    ],
+  };
+};
+
 const normalizeStoredMessages = (messages: readonly ConversationMessage[]): ConversationMessage[] =>
   messages.map((message) => {
     if (message.role === "assistant") {
       return {
         ...message,
         status: message.status ?? "complete",
+        warnings: message.warnings ?? [],
+        sections: message.sections ?? [],
+        sources: message.sources ?? [],
+        odds: message.odds ?? {},
       } satisfies AssistantMessage;
     }
 
     return message;
   });
-
-const createInitialSession = (): ChatSession => {
-  const nowIso = new Date().toISOString();
-  return {
-    id: `session-${createId()}`,
-    createdAt: nowIso,
-    updatedAt: nowIso,
-    messages: [...seedMessages],
-  };
-};
 
 const mergeSections = (
   existing: readonly AssistantSection[] | undefined,
@@ -236,11 +240,7 @@ const parseStreamPayload = (line: string): AssistantStreamPatch | null => {
 
     if (Array.isArray(payload.warnings)) {
       const warnings = payload.warnings.filter((item): item is string => typeof item === "string");
-      if (warnings.length > 0) {
-        patch.warnings = warnings;
-      } else {
-        patch.warnings = [];
-      }
+      patch.warnings = warnings;
     }
 
     if (typeof payload.status === "string") {
@@ -322,7 +322,104 @@ const toApiMessages = (messages: readonly ConversationMessage[]) =>
     };
   });
 
-export const useChatSession = () => {
+const mapRowToMessage = (
+  row: ChatMessageRow,
+  formatTimestamp: (date: Date) => string
+): ConversationMessage | null => {
+  const createdAt = formatTimestamp(new Date(row.created_at));
+
+  if (row.role === "assistant") {
+    const payload = row.content ?? {};
+    const headline = typeof payload.headline === "string" ? payload.headline : "Short answer";
+    const summary = typeof payload.summary === "string" ? payload.summary : "";
+    const odds =
+      payload.odds && typeof payload.odds === "object"
+        ? (payload.odds as AssistantMessage["odds"])
+        : undefined;
+    const sections = Array.isArray(payload.sections)
+      ? (payload.sections as AssistantMessage["sections"])
+      : undefined;
+    const sources = Array.isArray(payload.sources)
+      ? (payload.sources as AssistantMessage["sources"])
+      : undefined;
+    const warnings = Array.isArray(payload.warnings)
+      ? (payload.warnings as AssistantMessage["warnings"])
+      : [];
+    const error = typeof payload.error === "string" ? payload.error : undefined;
+
+    return {
+      id: row.id,
+      role: "assistant",
+      createdAt,
+      headline,
+      summary,
+      odds,
+      sections,
+      sources,
+      warnings,
+      status: (row.status as AssistantMessage["status"]) ?? "draft",
+      error,
+    } satisfies AssistantMessage;
+  }
+
+  if (row.role === "user") {
+    const payload = row.content ?? {};
+    const content = typeof payload.content === "string" ? payload.content : "";
+
+    return {
+      id: row.id,
+      role: "user",
+      content,
+      createdAt,
+    } satisfies UserMessage;
+  }
+
+  return null;
+};
+
+const buildAssistantPayload = (message: AssistantMessage) => ({
+  headline: message.headline,
+  summary: message.summary,
+  odds: message.odds,
+  sections: message.sections,
+  sources: message.sources,
+  warnings: message.warnings,
+  error: message.error,
+});
+
+export const useChatSession = ({ sessionId }: UseChatSessionOptions = {}) => {
+  const {
+    supabase,
+    profile,
+    chatSessions,
+    updateChatSessionMetadata,
+  } = useSessionContext();
+  const timezone = profile?.preferred_timezone ?? FALLBACK_TIMEZONE;
+
+  const timestampFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: timezone,
+      }),
+    [timezone]
+  );
+
+  const formatTimestamp = useCallback(
+    (date: Date) => `${timestampFormatter.format(date)} ${timezone}`,
+    [timestampFormatter, timezone]
+  );
+
+  const managedSessionIds = useMemo(
+    () => new Set(chatSessions.map((session) => session.id)),
+    [chatSessions]
+  );
+
+  const defaultSessionId = chatSessions[0]?.id ?? null;
+  const resolvedSessionId = sessionId ?? defaultSessionId ?? null;
+  const isManagedSession = resolvedSessionId ? managedSessionIds.has(resolvedSessionId) : false;
+
   const [session, setSession] = useState<ChatSession>(() => {
     const stored = readStoredSession<ConversationMessage>();
     if (stored) {
@@ -334,8 +431,9 @@ export const useChatSession = () => {
       };
     }
 
-    return createInitialSession();
+    return createInitialSession(formatTimestamp);
   });
+
   const [isStreaming, setIsStreaming] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -354,26 +452,152 @@ export const useChatSession = () => {
     persistStoredSession(session);
   }, [session]);
 
+  useEffect(() => {
+    abortRef.current?.abort();
+  }, [resolvedSessionId]);
+
+  useEffect(() => {
+    if (!profile || !resolvedSessionId || !isManagedSession) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadRemoteSession = async () => {
+      try {
+        const { data: sessionRow, error: sessionError } = await supabase
+          .from("chat_sessions")
+          .select("id, created_at, updated_at")
+          .eq("id", resolvedSessionId)
+          .eq("user_id", profile.id)
+          .maybeSingle();
+
+        if (sessionError || !sessionRow) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("No chat session found in Supabase", sessionError);
+          }
+          return;
+        }
+
+        const { data: messageRows, error: messagesError } = await supabase
+          .from("chat_messages")
+          .select("id, role, content, status, created_at, updated_at")
+          .eq("session_id", resolvedSessionId)
+          .order("created_at", { ascending: true });
+
+        if (messagesError) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Failed to load chat messages", messagesError);
+          }
+          return;
+        }
+
+        const messages =
+          messageRows?.map((row) => mapRowToMessage(row, formatTimestamp)).filter(Boolean) ?? [];
+
+        if (!isMounted) {
+          return;
+        }
+
+        const remoteSession: ChatSession = {
+          id: sessionRow.id,
+          createdAt: sessionRow.created_at ?? sessionRow.updated_at ?? new Date().toISOString(),
+          updatedAt: sessionRow.updated_at ?? sessionRow.created_at ?? new Date().toISOString(),
+          messages,
+        };
+
+        sessionRef.current = remoteSession;
+        setSession(remoteSession);
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Failed to load chat session from Supabase", error);
+        }
+      }
+    };
+
+    void loadRemoteSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [formatTimestamp, isManagedSession, profile, resolvedSessionId, supabase]);
+
+  const persistAssistantState = useCallback(
+    async (sessionIdValue: string, message: AssistantMessage, patch: AssistantStreamPatch) => {
+      if (!profile || !managedSessionIds.has(sessionIdValue)) {
+        return;
+      }
+
+      try {
+        await supabase
+          .from("chat_messages")
+          .update({
+            content: buildAssistantPayload(message),
+            status: message.status,
+          })
+          .eq("id", message.id);
+
+        if (patch.status === "complete" || patch.status === "error") {
+          const nowIso = new Date().toISOString();
+          const preview = message.summary?.trim().length
+            ? message.summary
+            : message.headline?.trim().length
+              ? message.headline
+              : "Assistant response ready.";
+
+          await supabase
+            .from("chat_sessions")
+            .update({
+              last_message_preview: preview,
+              last_message_at: nowIso,
+            })
+            .eq("id", sessionIdValue);
+
+          updateChatSessionMetadata(sessionIdValue, {
+            last_message_preview: preview ?? null,
+            last_message_at: nowIso,
+            updated_at: nowIso,
+          });
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Failed to persist assistant message", error);
+        }
+      }
+    },
+    [managedSessionIds, profile, supabase, updateChatSessionMetadata]
+  );
+
   const applyPatch = useCallback(
-    (assistantId: string, patch: AssistantStreamPatch) => {
+    (sessionIdValue: string, assistantId: string, patch: AssistantStreamPatch) => {
       setSession((prev) => {
+        const nextMessages = prev.messages.map((message) => {
+          if (message.id !== assistantId || message.role !== "assistant") {
+            return message;
+          }
+
+          return applyPatchToAssistant(message, patch);
+        });
+
         const next: ChatSession = {
           ...prev,
           updatedAt: new Date().toISOString(),
-          messages: prev.messages.map((message) => {
-            if (message.id !== assistantId || message.role !== "assistant") {
-              return message;
-            }
-
-            return applyPatchToAssistant(message, patch);
-          }),
+          messages: nextMessages,
         };
+
+        const assistant = nextMessages.find(
+          (message): message is AssistantMessage => message.id === assistantId && message.role === "assistant"
+        );
+
+        if (assistant) {
+          void persistAssistantState(sessionIdValue, assistant, patch);
+        }
 
         sessionRef.current = next;
         return next;
       });
     },
-    []
+    [persistAssistantState]
   );
 
   const finishStreaming = useCallback(() => {
@@ -395,6 +619,9 @@ export const useChatSession = () => {
 
       const now = new Date();
       const nowIso = now.toISOString();
+      const sessionIdValue = resolvedSessionId ?? sessionRef.current.id;
+      const isSessionPersisted = managedSessionIds.has(sessionIdValue);
+
       const userMessage: UserMessage = {
         id: `user-${createId()}`,
         role: "user",
@@ -417,6 +644,7 @@ export const useChatSession = () => {
 
       const nextSession: ChatSession = {
         ...sessionRef.current,
+        id: sessionIdValue,
         updatedAt: nowIso,
         messages: [...sessionRef.current.messages, userMessage, assistantMessage],
       };
@@ -435,12 +663,50 @@ export const useChatSession = () => {
       const controller = new AbortController();
       abortRef.current = controller;
 
+      if (profile && isSessionPersisted) {
+        void supabase
+          .from("chat_messages")
+          .insert([
+            {
+              id: userMessage.id,
+              session_id: sessionIdValue,
+              role: "user",
+              content: { content: trimmed },
+              status: "complete",
+              created_at: nowIso,
+            },
+            {
+              id: assistantMessage.id,
+              session_id: sessionIdValue,
+              role: "assistant",
+              content: buildAssistantPayload(assistantMessage),
+              status: assistantMessage.status,
+              created_at: nowIso,
+            },
+          ])
+          .select();
+
+        void supabase
+          .from("chat_sessions")
+          .update({
+            last_message_preview: trimmed,
+            last_message_at: nowIso,
+          })
+          .eq("id", sessionIdValue);
+
+        updateChatSessionMetadata(sessionIdValue, {
+          last_message_preview: trimmed,
+          last_message_at: nowIso,
+          updated_at: nowIso,
+        });
+      }
+
       const runSimulator = async () => {
         try {
           await simulateAssistantStream({
             prompt: trimmed,
             signal: controller.signal,
-            onPatch: (patch) => applyPatch(assistantMessage.id, patch),
+            onPatch: (patch) => applyPatch(sessionIdValue, assistantMessage.id, patch),
           });
           return true;
         } catch (fallbackError) {
@@ -448,7 +714,7 @@ export const useChatSession = () => {
             return true;
           }
 
-          applyPatch(assistantMessage.id, {
+          applyPatch(sessionIdValue, assistantMessage.id, {
             status: "error",
             error: "We couldn't complete that request. Try again shortly.",
           });
@@ -470,10 +736,11 @@ export const useChatSession = () => {
                 body: JSON.stringify({
                   prompt: trimmed,
                   conversation: conversationPayload,
-                  sessionId: sessionRef.current.id,
+                  sessionId: sessionIdValue,
                   sportKey: normalizedSportKey,
                   marketKey: normalizedMarketKey,
                   quickPromptId,
+                  userProfileId: profile?.id,
                 }),
                 signal: controller.signal,
               });
@@ -481,10 +748,10 @@ export const useChatSession = () => {
               if (response.ok && response.body) {
                 await readStream(
                   response.body,
-                  (patch) => applyPatch(assistantMessage.id, patch),
+                  (patch) => applyPatch(sessionIdValue, assistantMessage.id, patch),
                   controller.signal
                 );
-                applyPatch(assistantMessage.id, { status: "complete" });
+                applyPatch(sessionIdValue, assistantMessage.id, { status: "complete" });
                 return;
               }
 
@@ -537,7 +804,16 @@ export const useChatSession = () => {
 
       void execute();
     },
-    [applyPatch, finishStreaming]
+    [
+      applyPatch,
+      finishStreaming,
+      formatTimestamp,
+      managedSessionIds,
+      profile,
+      resolvedSessionId,
+      supabase,
+      updateChatSessionMetadata,
+    ]
   );
 
   useEffect(() => () => {

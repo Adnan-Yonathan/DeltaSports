@@ -5,7 +5,6 @@ export type StoredChatSession<TMessage> = {
   createdAt: string;
   updatedAt: string;
   messages: readonly TMessage[];
-  distinctId: string | null;
 };
 
 export const readStoredSession = <TMessage>(): StoredChatSession<TMessage> | null => {

@@ -8,7 +8,6 @@ import type {
   ConversationMessage,
   UserMessage,
 } from "@/components/chat/types";
-import { captureClientEvent, getDistinctId } from "@/lib/analytics/posthog";
 
 import { simulateAssistantStream } from "./mockStream";
 import type { AssistantStreamPatch } from "./patch";
@@ -19,7 +18,6 @@ type ChatSession = {
   createdAt: string;
   updatedAt: string;
   messages: ConversationMessage[];
-  distinctId: string | null;
 };
 
 type SendPromptArgs = {
@@ -108,14 +106,13 @@ const normalizeStoredMessages = (messages: readonly ConversationMessage[]): Conv
     return message;
   });
 
-const createInitialSession = (distinctId: string | null): ChatSession => {
+const createInitialSession = (): ChatSession => {
   const nowIso = new Date().toISOString();
   return {
     id: `session-${createId()}`,
     createdAt: nowIso,
     updatedAt: nowIso,
     messages: [...seedMessages],
-    distinctId,
   };
 };
 
@@ -315,12 +312,14 @@ export const useChatSession = () => {
     const stored = readStoredSession<ConversationMessage>();
     if (stored) {
       return {
-        ...stored,
+        id: stored.id,
+        createdAt: stored.createdAt,
+        updatedAt: stored.updatedAt,
         messages: normalizeStoredMessages(stored.messages),
       };
     }
 
-    return createInitialSession(null);
+    return createInitialSession();
   });
   const [isStreaming, setIsStreaming] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -339,16 +338,6 @@ export const useChatSession = () => {
   useEffect(() => {
     persistStoredSession(session);
   }, [session]);
-
-  useEffect(() => {
-    if (session.distinctId) {
-      return;
-    }
-    const id = getDistinctId();
-    if (id) {
-      setSession((prev) => ({ ...prev, distinctId: id }));
-    }
-  }, [session.distinctId]);
 
   const applyPatch = useCallback(
     (assistantId: string, patch: AssistantStreamPatch) => {
@@ -426,21 +415,6 @@ export const useChatSession = () => {
       setIsStreaming(true);
       setLastError(null);
 
-      if (quickPromptId) {
-        captureClientEvent("chat_quick_prompt_selected", {
-          quickPromptId,
-          promptLength: trimmed.length,
-          conversationDepth: priorMessages,
-        });
-      }
-
-      captureClientEvent("chat_prompt_submitted", {
-        promptLength: trimmed.length,
-        quickPromptId: quickPromptId ?? null,
-        conversationDepth: priorMessages,
-        assistantResponses,
-      });
-
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -456,7 +430,6 @@ export const useChatSession = () => {
               prompt: trimmed,
               conversation: conversationPayload,
               sessionId: sessionRef.current.id,
-              distinctId: sessionRef.current.distinctId,
             }),
             signal: controller.signal,
           });
@@ -465,12 +438,6 @@ export const useChatSession = () => {
             await readStream(response.body, (patch) => applyPatch(assistantMessage.id, patch), controller.signal);
             applyPatch(assistantMessage.id, { status: "complete" });
 
-            captureClientEvent("llm.answer.stream_completed", {
-              conversationDepth: priorMessages + 2,
-              quickPromptId: quickPromptId ?? null,
-              latencyMs: performance.now() - start,
-              transport: "network",
-            });
             return;
           }
 
@@ -507,13 +474,6 @@ export const useChatSession = () => {
 
           setLastError(errorMessage);
 
-          captureClientEvent("llm.answer.stream_failed", {
-            conversationDepth: priorMessages + 2,
-            quickPromptId: quickPromptId ?? null,
-            httpStatus: response.status,
-            guardrail: guardrailCode,
-            retryAfterMs,
-          });
           return;
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") {
@@ -531,13 +491,6 @@ export const useChatSession = () => {
               onPatch: (patch) => applyPatch(assistantMessage.id, patch),
             });
 
-            captureClientEvent("llm.answer.stream_completed", {
-              conversationDepth: priorMessages + 2,
-              quickPromptId: quickPromptId ?? null,
-              latencyMs: result.latencyMs,
-              transport: result.transport,
-              fallback: true,
-            });
           } catch (fallbackError) {
             if (fallbackError instanceof DOMException && fallbackError.name === "AbortError") {
               return;
@@ -549,11 +502,6 @@ export const useChatSession = () => {
             });
 
             setLastError("We hit a snag while generating that response. Please try again.");
-
-            captureClientEvent("llm.answer.stream_failed", {
-              conversationDepth: priorMessages + 2,
-              quickPromptId: quickPromptId ?? null,
-            });
           }
         } finally {
           finishStreaming();
@@ -581,7 +529,6 @@ export const useChatSession = () => {
     isStreaming,
     sendPrompt,
     sessionId: session.id,
-    distinctId: session.distinctId,
     hasAssistantResponse,
     lastError,
     clearError,

@@ -19,12 +19,9 @@ The `web` directory contains the Next.js + Tailwind front-end configured for dep
 5. Configure the edge-function project by following the guidance in [supabase/functions/README.md](supabase/functions/README.md), then deploy `on-auth-profile` as the initial auth webhook to bootstrap bettor profiles.
 
 ### Operations checklist
-1. Install the Python instrumentation dependencies used by the LLM analytics tooling: `pip install -r requirements.txt`. This ensures `posthog` and `openai` are available for local scripts and CI jobs that exercise the analytics pipeline.
-2. Keep the analytics credentials in sync across environments by setting `POSTHOG_API_KEY`, `POSTHOG_HOST`, and `OPENAI_API_KEY` anywhere the chat orchestrator runs. Update deployment targets immediately after rotating any of the keys.
-3. When rotating keys, update `.env.local`, the associated Vercel/Supabase environment variables, and notify the team via the runbook so stale sessions can be invalidated. Redeploy the affected services to guarantee the refreshed secrets are loaded.
-4. For the client experience, embed the PostHog browser snippet (or initialize the React SDK) so chat events like `chat_prompt_submitted` and `odds_format_toggled` flow to analytics; otherwise events are logged to the console in development only.
-5. Install the Node analytics bridge (`npm install @posthog/ai posthog-node` inside `web/`) so the server-side orchestrator can stream token usage and narrative metrics to PostHog. When packages are unavailable (e.g., in restricted sandboxes) the orchestrator will automatically fall back to deterministic copy.
-
-Refer to [docs/analytics.md](docs/analytics.md) for the full event catalogue, retention guidance, and opt-out procedures.
+1. Run `npm install` from the repository root to install the `web/` workspace dependencies before starting local development.
+2. Copy `web/.env.example` to `web/.env.local` and provide real Supabase and odds provider credentials so the chat API can reach live data sources.
+3. When rotating Supabase or odds provider keys, update the matching environment variables on Vercel and redeploy so the serverless runtime picks up the new values.
+4. Monitor `/api/chat` logs (locally or in Vercel) for guardrail warnings or throttling responses to ensure the conversational experience remains responsive during high-traffic events.
 
 > **Note:** Package installation may require network access which is unavailable in this environment, but the project structure is ready for local development.

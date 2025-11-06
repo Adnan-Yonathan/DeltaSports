@@ -4,23 +4,9 @@ import type {
 } from "@/lib/chat/server/orchestrator";
 import type { SportsDataResult } from "@/lib/sports-data";
 
-import type { InstrumentedOpenAI } from "./instrumentation";
-
-const SYSTEM_PROMPT = `You are DeltaSports' responsible betting co-pilot. Craft concise, hedged summaries for sports bettors.
-- Never guarantee outcomes; use language such as "appears", "suggests", or "could".
-- Encourage readers to verify lines and stay disciplined with bankroll management.
-- Respond ONLY with valid JSON matching the schema: { "intro": string, "details": string }.
-- Keep each field to at most two sentences.
-- Intro should highlight the most actionable odds context and timeframe.
-- Details should weave in injuries or trends and end with a responsible betting reminder.
-- Reference times in Eastern Time (ET) when possible.
-- Do not include markdown, newlines outside the JSON strings, or additional keys.`;
-
-const DEFAULT_MODEL = "gpt-4o-mini";
-
-const formatTimestamp = (iso?: string) => {
+const formatTimestamp = (iso?: string | null) => {
   if (!iso) {
-    return "unknown";
+    return "recently";
   }
 
   try {
@@ -35,285 +21,90 @@ const formatTimestamp = (iso?: string) => {
     if (process.env.NODE_ENV === "development") {
       console.warn("Failed to format timestamp", error);
     }
-    return iso;
+    return "recently";
   }
-};
-
-const describeSlots = (plan: PlannerResult) => {
-  const { slots } = plan;
-  const parts = [
-    slots.sport ? `sport=${slots.sport}` : null,
-    slots.league ? `league=${slots.league}` : null,
-    slots.market ? `market=${slots.market}` : null,
-    slots.timeframe ? `timeframe=${slots.timeframe}` : null,
-    slots.entity ? `entity=${slots.entity}` : null,
-  ].filter(Boolean);
-
-  const rationale = slots.rationale.length
-    ? `Rationale: ${slots.rationale.join(" | ")}`
-    : "Rationale: none.";
-
-  return `Slots → ${parts.join(", ") || "unspecified"}. ${rationale}`;
 };
 
 const formatAmerican = (value: number) => (value > 0 ? `+${value}` : `${value}`);
 
-const summarizeOdds = (data?: SportsDataResult | null) => {
-  if (!data?.odds?.length) {
-    return ["No odds snapshot available."];
+const buildIntro = (plan: PlannerResult, data: SportsDataResult | null): string => {
+  const focus =
+    plan.slots.entity ?? plan.slots.league?.toUpperCase() ?? plan.slots.sport ?? "this matchup";
+  const timeframe = plan.slots.timeframe?.replace(/-/g, " ") ?? "the current window";
+  const market = plan.slots.market ?? "moneyline";
+
+  const primaryOdds = data?.odds?.[0];
+  if (primaryOdds) {
+    const impliedPercent = Math.round(primaryOdds.impliedProbability * 1000) / 10;
+    return `${focus} ${market} odds for ${timeframe}: ${primaryOdds.sportsbook} lists ${formatAmerican(primaryOdds.american)} (${primaryOdds.decimal.toFixed(2)} decimal, ${impliedPercent}% implied).`;
   }
 
-  return data.odds.slice(0, 3).map((odds) => {
-    const impliedPercent = (odds.impliedProbability * 100).toFixed(1);
-    return `${odds.sportsbook} ${formatAmerican(odds.american)} (${odds.decimal.toFixed(2)} decimal, ${impliedPercent}% implied) • ${odds.market} • refreshed ${formatTimestamp(odds.lastUpdated)} ET`;
-  });
+  return `${focus} ${market} outlook for ${timeframe}: no verified book price surfaced, so treat lines as provisional and check your sportsbook before wagering.`;
 };
 
-const summarizeTrends = (data?: SportsDataResult | null) => {
-  if (!data?.trends?.length) {
-    return ["No recent trend data supplied."];
+const buildDetails = (data: SportsDataResult | null): string => {
+  const fragments: string[] = [];
+
+  if (data?.trends?.length) {
+    const trend = data.trends[0];
+    fragments.push(
+      `${trend.label} sits at ${trend.value} as of ${formatTimestamp(trend.updatedAt)} ET.`
+    );
   }
 
-  return data.trends.slice(0, 3).map((trend) => `${trend.label}: ${trend.value} (updated ${formatTimestamp(trend.updatedAt)} ET)`);
-};
-
-const summarizeInjuries = (data?: SportsDataResult | null) => {
-  if (!data?.injuries?.length) {
-    return ["No injuries reported in the latest wire."];
+  if (data?.injuries?.length) {
+    const injury = data.injuries[0];
+    fragments.push(
+      `${injury.player} is listed as ${injury.status.toLowerCase()} (${injury.note}) from the ${formatTimestamp(
+        injury.updatedAt
+      )} ET report.`
+    );
   }
 
-  return data.injuries.slice(0, 3).map(
-    (injury) =>
-      `${injury.player} – ${injury.status} (${injury.note}, checked ${formatTimestamp(injury.updatedAt)} ET)`
-  );
-};
-
-const buildUserMessage = ({
-  prompt,
-  plan,
-  primaryResult,
-}: {
-  prompt: string;
-  plan: PlannerResult;
-  primaryResult?: SportsDataResult | null;
-}) => {
-  const lines = [
-    `User prompt: ${prompt}`,
-    describeSlots(plan),
-    `Primary odds:`,
-    ...summarizeOdds(primaryResult).map((line) => `- ${line}`),
-    `Performance trends:`,
-    ...summarizeTrends(primaryResult).map((line) => `- ${line}`),
-    `Injury notes:`,
-    ...summarizeInjuries(primaryResult).map((line) => `- ${line}`),
-  ];
-
-  if (primaryResult?.generatedAt) {
-    lines.push(`Dataset generated: ${formatTimestamp(primaryResult.generatedAt)} ET`);
+  if (!fragments.length && data?.odds?.length) {
+    const odds = data.odds[0];
+    fragments.push(
+      `Lines last refreshed ${formatTimestamp(odds.lastUpdated)} ET; shop around as books may move quickly.`
+    );
   }
 
-  lines.push(
-    "Task: Produce intro + details in JSON. Acknowledge odds volatility and encourage bankroll discipline."
-  );
+  fragments.push("Always verify lines and stick to disciplined bankroll management.");
 
-  return lines.join("\n");
-};
-
-const extractResponseText = (payload: unknown): string | null => {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const candidate = payload as {
-    output_text?: unknown;
-    output?: unknown;
-  };
-
-  if (Array.isArray(candidate.output_text)) {
-    const text = candidate.output_text.filter((value): value is string => typeof value === "string").join("\n").trim();
-    if (text) {
-      return text;
-    }
-  }
-
-  if (Array.isArray((candidate as { output?: unknown[] }).output)) {
-    for (const block of (candidate as { output?: unknown[] }).output ?? []) {
-      if (!block || typeof block !== "object") {
-        continue;
-      }
-
-      const content = (block as { content?: unknown }).content;
-      if (!Array.isArray(content)) {
-        continue;
-      }
-
-      for (const fragment of content) {
-        if (!fragment || typeof fragment !== "object") {
-          continue;
-        }
-
-        const value =
-          typeof (fragment as { text?: { value?: string } }).text?.value === "string"
-            ? (fragment as { text: { value: string } }).text.value
-            : typeof (fragment as { value?: string }).value === "string"
-              ? (fragment as { value: string }).value
-              : undefined;
-
-        if (value?.trim()) {
-          return value.trim();
-        }
-      }
-    }
-  }
-
-  return null;
-};
-
-const parseOverrides = (raw: string): ComposeOverrides | null => {
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
-
-    const intro = typeof (parsed as { intro?: unknown }).intro === "string"
-      ? (parsed as { intro: string }).intro.trim()
-      : undefined;
-    const details = typeof (parsed as { details?: unknown }).details === "string"
-      ? (parsed as { details: string }).details.trim()
-      : undefined;
-
-    if (!intro && !details) {
-      return null;
-    }
-
-    return {
-      intro,
-      details,
-    };
-  } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("Failed to parse LLM narrative payload", error);
-    }
-    return null;
-  }
+  return fragments.join(" ");
 };
 
 export type NarrativeGenerationResult =
   | {
       status: "generated";
       overrides: ComposeOverrides;
-      metadata: {
-        model?: string;
-        promptTokens?: number;
-        responseTokens?: number;
-        totalTokens?: number;
-        durationMs: number;
-      };
     }
   | {
       status: "skipped";
-      reason: "missing-client" | "missing-method" | "empty-response" | "invalid-payload" | "request-error";
-      errorMessage?: string;
+      reason: "insufficient-data";
     };
 
-export const maybeGenerateNarrative = async (
-  openai: InstrumentedOpenAI | null,
-  {
-    prompt,
-    plan,
-    primaryResult,
-  }: {
-    prompt: string;
-    plan: PlannerResult;
-    primaryResult?: SportsDataResult | null;
-  },
-  { model = DEFAULT_MODEL, debug = process.env.NODE_ENV === "development" }: { model?: string; debug?: boolean } = {}
-): Promise<NarrativeGenerationResult> => {
-  if (!openai) {
-    return { status: "skipped", reason: "missing-client" };
+export const maybeGenerateNarrative = async ({
+  plan,
+  primaryResult,
+}: {
+  prompt: string;
+  plan: PlannerResult;
+  primaryResult?: SportsDataResult | null;
+}): Promise<NarrativeGenerationResult> => {
+  const data = primaryResult ?? null;
+
+  if (!data) {
+    return { status: "skipped", reason: "insufficient-data" };
   }
 
-  const creator = openai.responses?.create;
-  if (typeof creator !== "function") {
-    return { status: "skipped", reason: "missing-method" };
-  }
+  const intro = buildIntro(plan, data);
+  const details = buildDetails(data);
 
-  const startedAt = Date.now();
-
-  try {
-    const response = await creator({
-      model,
-      input: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserMessage({ prompt, plan, primaryResult }) },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "DeltaSportsNarrative",
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              intro: { type: "string" },
-              details: { type: "string" },
-            },
-            required: ["intro", "details"],
-          },
-        },
-      },
-    });
-
-    const durationMs = Date.now() - startedAt;
-    const text = extractResponseText(response);
-
-    if (!text) {
-      return { status: "skipped", reason: "empty-response" };
-    }
-
-    const overrides = parseOverrides(text);
-    if (!overrides) {
-      return { status: "skipped", reason: "invalid-payload" };
-    }
-
-    const usage = (response as { usage?: Record<string, unknown> }).usage ?? {};
-    const promptTokens =
-      typeof (usage as { prompt_tokens?: number }).prompt_tokens === "number"
-        ? (usage as { prompt_tokens: number }).prompt_tokens
-        : typeof (usage as { input_tokens?: number }).input_tokens === "number"
-          ? (usage as { input_tokens: number }).input_tokens
-          : undefined;
-    const responseTokens =
-      typeof (usage as { completion_tokens?: number }).completion_tokens === "number"
-        ? (usage as { completion_tokens: number }).completion_tokens
-        : typeof (usage as { output_tokens?: number }).output_tokens === "number"
-          ? (usage as { output_tokens: number }).output_tokens
-          : undefined;
-    const totalTokens =
-      typeof (usage as { total_tokens?: number }).total_tokens === "number"
-        ? (usage as { total_tokens: number }).total_tokens
-        : typeof promptTokens === "number" && typeof responseTokens === "number"
-          ? promptTokens + responseTokens
-          : undefined;
-
-    const metadata = {
-      model: typeof (response as { model?: string }).model === "string" ? (response as { model: string }).model : model,
-      promptTokens,
-      responseTokens,
-      totalTokens,
-      durationMs,
-    };
-
-    return { status: "generated", overrides, metadata };
-  } catch (error) {
-    if (debug) {
-      console.warn("LLM narrative generation failed", error);
-    }
-    return {
-      status: "skipped",
-      reason: "request-error",
-      errorMessage: error instanceof Error ? error.message : undefined,
-    };
-  }
+  return {
+    status: "generated",
+    overrides: {
+      intro,
+      details,
+    },
+  };
 };

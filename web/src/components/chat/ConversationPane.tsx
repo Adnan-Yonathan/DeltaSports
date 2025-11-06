@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import type { OddsFormat, QuickPrompt } from "./types";
-import { captureClientEvent, ensurePosthogClient } from "@/lib/analytics/posthog";
 import { useChatSession } from "@/lib/chat/useChatSession";
 
 const quickPrompts: readonly QuickPrompt[] = [
@@ -40,10 +39,6 @@ export function ConversationPane() {
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>("american");
   const { messages, isStreaming, sendPrompt, hasAssistantResponse, lastError, clearError } = useChatSession();
 
-  useEffect(() => {
-    ensurePosthogClient();
-  }, []);
-
   const handleComposerSubmit = useCallback(
     ({ prompt, quickPromptId }: { prompt: string; quickPromptId?: string }) => {
       const trimmed = prompt.trim();
@@ -65,12 +60,6 @@ export function ConversationPane() {
         if (current === format) {
           return current;
         }
-
-        captureClientEvent("odds_format_toggled", {
-          format,
-          previousFormat: current,
-          assistantResponses,
-        });
 
         return format;
       });

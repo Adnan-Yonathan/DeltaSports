@@ -6,14 +6,7 @@
       "use": "@vercel/next"
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "web/$1"
-    }
-  ],
   "installCommand": "npm install",
-  "buildCommand": "npm run build",
-  "devCommand": "npm run dev",
-  "outputDirectory": ".next"
+  "buildCommand": "npm run build --workspace web",
+  "devCommand": "npm run dev --workspace web"
 }

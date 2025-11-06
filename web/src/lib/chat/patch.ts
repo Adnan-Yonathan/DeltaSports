@@ -13,6 +13,7 @@ export type AssistantStreamPatch = {
   sections?: readonly AssistantSection[];
   section?: AssistantSection;
   sources?: readonly SourceBadge[];
+  warnings?: readonly string[];
   status?: AssistantStatus;
   error?: string;
 };

@@ -244,6 +244,108 @@ export default function BetHistoryPage() {
   const winRate = settledBets > 0 ? (analytics.wins / settledBets) * 100 : 0;
   const roi = analytics.totalWagered > 0 ? (analytics.totalProfit / analytics.totalWagered) * 100 : 0;
 
+  const exportToCSV = useCallback(() => {
+    if (bets.length === 0) {
+      alert('No bets to export');
+      return;
+    }
+
+    // CSV headers
+    const headers = [
+      'Event',
+      'Market',
+      'Wager',
+      'American Odds',
+      'Decimal Odds',
+      'Status',
+      'Payout',
+      'Profit/Loss',
+      'Placed At',
+      'Settled At',
+      'Notes',
+    ];
+
+    // CSV rows
+    const rows = bets.map((bet) => {
+      const profitLoss = bet.status === 'won'
+        ? (bet.settled_payout || 0) - bet.wager_amount
+        : bet.status === 'lost'
+        ? -bet.wager_amount
+        : 0;
+
+      return [
+        `"${bet.event_name.replace(/"/g, '""')}"`,
+        `"${bet.market}"`,
+        bet.wager_amount.toFixed(2),
+        bet.american_odds ?? '',
+        bet.decimal_odds ?? '',
+        bet.status,
+        bet.settled_payout?.toFixed(2) ?? '',
+        profitLoss.toFixed(2),
+        new Date(bet.placed_at).toLocaleString(),
+        bet.settled_at ? new Date(bet.settled_at).toLocaleString() : '',
+        `"${(bet.notes || '').replace(/"/g, '""')}"`,
+      ].join(',');
+    });
+
+    // Combine and create CSV
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bet-history-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [bets]);
+
+  const exportToJSON = useCallback(() => {
+    if (bets.length === 0) {
+      alert('No bets to export');
+      return;
+    }
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      total_bets: bets.length,
+      analytics: {
+        total_wagered: analytics.totalWagered,
+        total_profit: analytics.totalProfit,
+        win_rate: winRate,
+        roi: roi,
+        wins: analytics.wins,
+        losses: analytics.losses,
+        pushes: analytics.pushes,
+      },
+      bets: bets.map((bet) => ({
+        event_name: bet.event_name,
+        market: bet.market,
+        wager_amount: bet.wager_amount,
+        american_odds: bet.american_odds,
+        decimal_odds: bet.decimal_odds,
+        expected_value: bet.expected_value,
+        status: bet.status,
+        settled_payout: bet.settled_payout,
+        notes: bet.notes,
+        placed_at: bet.placed_at,
+        settled_at: bet.settled_at,
+      })),
+    };
+
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bet-history-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [bets, analytics, winRate, roi]);
+
   if (!userProfile) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -255,11 +357,31 @@ export default function BetHistoryPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h3 className="text-2xl font-semibold text-white">Bet History</h3>
-        <p className="mt-1 text-sm text-slate-300">
-          Review all your bets and update their outcomes.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-2xl font-semibold text-white">Bet History</h3>
+          <p className="mt-1 text-sm text-slate-300">
+            Review all your bets and update their outcomes.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={exportToCSV}
+            disabled={bets.length === 0}
+            className="rounded-lg border border-brand-accent/40 bg-brand-accent/20 px-4 py-2 text-sm font-medium text-brand-accent transition hover:border-brand-accent hover:bg-brand-accent/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportToJSON}
+            disabled={bets.length === 0}
+            className="rounded-lg border border-brand-accent/40 bg-brand-accent/20 px-4 py-2 text-sm font-medium text-brand-accent transition hover:border-brand-accent hover:bg-brand-accent/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Export JSON
+          </button>
+        </div>
       </div>
 
       {/* Analytics Overview */}

@@ -167,6 +167,63 @@ node scripts/verify-deployment.mjs
 
 ---
 
+### 🚢 prepare-vercel.sh
+
+**Purpose**: Prepares project for Vercel production deployment.
+
+**Usage**:
+```bash
+bash scripts/prepare-vercel.sh
+```
+
+**What it does**:
+1. Checks prerequisites (Node.js, npm, Vercel CLI)
+2. Verifies environment configuration
+3. Tests API connectivity
+4. Installs dependencies
+5. Runs production build test
+6. Verifies deployment readiness
+7. Provides deployment instructions
+
+**Use this before first deployment!**
+
+**Exit Codes**:
+- `0` - Ready for deployment
+- `1` - Prerequisites or tests failed
+
+---
+
+### 🌐 verify-production.mjs
+
+**Purpose**: Verifies a live production deployment is working.
+
+**Usage**:
+```bash
+node scripts/verify-production.mjs <production-url>
+```
+
+**Example**:
+```bash
+node scripts/verify-production.mjs https://deltasports.vercel.app
+```
+
+**What it does**:
+1. Tests homepage accessibility
+2. Tests static assets
+3. Tests API routes
+4. Tests Supabase integration
+5. Tests edge functions
+6. Measures performance
+7. Checks security headers
+
+**Use this after deployment!**
+
+**Exit Codes**:
+- `0` - Production working correctly
+- `1` - Critical issues in production
+
+---
+
 ## 🚀 Quick Start
 
 ### First Time Setup
@@ -247,6 +304,8 @@ npm run check-config        # Run all config checks
 # Deployment
 npm run deploy-functions    # Deploy all edge functions
 npm run verify-deployment   # Complete deployment verification
+npm run prepare-vercel      # Prepare for Vercel deployment
+npm run verify-production   # Verify production deployment (requires URL argument)
 
 # Testing
 npm run test-functions      # Test all edge functions

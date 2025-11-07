@@ -91,7 +91,7 @@ cp .env.template .env.local
 
 ### Deployment
 
-Follow our **automated deployment process** in 3 phases (~1.5 hours total):
+Follow our **automated deployment process** in 5 phases (~2 hours total):
 
 #### **Phase 1: Database Setup** (30-45 min)
 Deploy database schema and security policies:
@@ -100,18 +100,15 @@ Deploy database schema and security policies:
 -- 1. Run: supabase/01-schema.sql
 -- 2. Run: supabase/02-rls-policies.sql
 ```
-See [Database Schema Documentation](supabase/sql-prompts.md) for details.
 
 #### **Phase 2: Environment Configuration** (20-30 min)
 Automated environment setup:
 ```bash
 cd web
 
-# Configure local environment
+# Configure and validate
 cp .env.template .env.local
 # Edit .env.local with your API keys
-
-# Validate configuration
 npm run check-config
 
 # Setup Supabase secrets (automated)
@@ -130,10 +127,35 @@ npm run test-all
 ```
 See [PHASE3_QUICKSTART.md](PHASE3_QUICKSTART.md) for detailed guide.
 
+#### **Phase 4: Documentation & Verification** (5-10 min)
+Comprehensive deployment verification:
+```bash
+# Verify complete deployment
+npm run verify-deployment
+```
+
+#### **Phase 5: Production Deployment** (20-30 min)
+Deploy to Vercel:
+```bash
+# Prepare for production
+npm run prepare-vercel
+
+# Deploy (from web directory)
+vercel --prod
+
+# Verify production
+npm run verify-production https://your-url.vercel.app
+```
+See [PHASE5_QUICKSTART.md](PHASE5_QUICKSTART.md) for detailed guide.
+
 ### Complete Documentation
 
 - **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - Complete step-by-step deployment (all phases)
+- **[DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)** - System overview and architecture
 - **[ENVIRONMENT_SETUP.md](ENVIRONMENT_SETUP.md)** - Detailed environment configuration guide
+- **[PHASE2_QUICKSTART.md](PHASE2_QUICKSTART.md)** - 30-minute environment setup
+- **[PHASE3_QUICKSTART.md](PHASE3_QUICKSTART.md)** - 15-minute edge function deployment
+- **[PHASE5_QUICKSTART.md](PHASE5_QUICKSTART.md)** - 20-minute production deployment
 - **[Product Requirements](docs/PRD.md)** - Product specifications
 - **[Design Kickoff](docs/design/kickoff.md)** - Design documentation
 - **[Edge Functions](supabase/functions/README.md)** - Edge functions workspace guide
@@ -169,7 +191,12 @@ npm run deploy-functions     # Deploy edge functions
 # Testing
 npm run test-functions       # Test edge functions
 npm run test-integration     # Run integration tests
+npm run verify-deployment    # Comprehensive deployment verification
 npm run test-all            # Complete test suite
+
+# Production Deployment
+npm run prepare-vercel       # Prepare for Vercel deployment
+npm run verify-production    # Verify production deployment (requires URL)
 
 # Build & Deploy
 npm run build               # Build for production

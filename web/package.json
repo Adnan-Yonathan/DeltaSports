@@ -16,7 +16,9 @@
     "test-functions": "node ../scripts/test-functions.mjs",
     "test-integration": "node ../scripts/test-integration.mjs",
     "verify-deployment": "node ../scripts/verify-deployment.mjs",
-    "test-all": "npm run check-config && npm run test-functions && npm run test-integration"
+    "test-all": "npm run check-config && npm run test-functions && npm run test-integration",
+    "prepare-vercel": "bash ../scripts/prepare-vercel.sh",
+    "verify-production": "node ../scripts/verify-production.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

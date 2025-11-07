@@ -1,87 +1,10 @@
 'use client';
 
 import { Sidebar } from '@/components/chat/Sidebar';
-import { useSupabaseAuth } from '@/components/auth/SupabaseAuthProvider';
-import { getSupabaseClient } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense } from 'react';
 
-type TonePreference = 'neutral' | 'confident' | 'cautious';
-
-function CommandCenterGuard({ children }: { children: ReactNode }) {
-  const { session, userProfile, loading, signOut } = useSupabaseAuth();
-  const router = useRouter();
-  const supabase = getSupabaseClient();
-  const [currentTone, setCurrentTone] = useState<TonePreference>('neutral');
-
-  useEffect(() => {
-    if (!loading && !session) {
-      router.replace('/sign-in');
-    }
-  }, [loading, router, session]);
-
-  useEffect(() => {
-    if (userProfile?.tone_preference) {
-      setCurrentTone(userProfile.tone_preference);
-    }
-  }, [userProfile]);
-
-  const handleToneChange = useCallback(async (newTone: TonePreference) => {
-    if (!userProfile) {
-      return;
-    }
-
-    setCurrentTone(newTone);
-
-    try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ tone_preference: newTone })
-        .eq('id', userProfile.id);
-
-      if (error) {
-        console.error('Failed to update tone preference', error);
-        setCurrentTone(userProfile.tone_preference);
-      }
-    } catch (error) {
-      console.error('Error updating tone preference', error);
-      setCurrentTone(userProfile.tone_preference);
-    }
-  }, [userProfile, supabase]);
-
-  const handleSignOut = useCallback(async () => {
-    const { error } = await signOut();
-    if (error) {
-      console.error('Error during sign out', error);
-      return;
-    }
-
-    router.replace('/sign-in');
-  }, [router, signOut]);
-
-  const userEmail = useMemo(() => {
-    if (!session) {
-      return 'Account';
-    }
-
-    const metadataEmail = session.user.user_metadata?.email;
-
-    return session.user.email ?? (typeof metadataEmail === 'string' ? metadataEmail : 'Account');
-  }, [session]);
-
-  if (loading) {
-    return (
-      <section className="flex h-full w-full items-center justify-center rounded-2xl border border-white/10 bg-black/40 text-sm text-slate-300">
-        Loading Command Center...
-      </section>
-    );
-  }
-
-  if (!session) {
-    return null;
-  }
-
+export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <section className="flex h-full w-full gap-6">
       <Suspense
@@ -144,27 +67,10 @@ function CommandCenterGuard({ children }: { children: ReactNode }) {
               <span className="uppercase tracking-wide">Last synced</span>
               <span className="text-sm font-medium text-white">2:45 PM ET</span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right text-xs text-slate-400">
-                <span className="block uppercase tracking-wide">Signed in</span>
-                <span className="text-sm font-medium text-white">{userEmail}</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
-              >
-                Sign out
-              </button>
-            </div>
           </div>
         </header>
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-6">{children}</div>
       </div>
     </section>
   );
-}
-
-export default function AppLayout({ children }: { children: ReactNode }) {
-  return <CommandCenterGuard>{children}</CommandCenterGuard>;
 }

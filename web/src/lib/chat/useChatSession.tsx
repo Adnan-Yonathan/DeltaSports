@@ -1,9 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { AssistantMessage, ConversationMessage, UserMessage } from "@/components/chat/types";
+import type {
+  AssistantMessage,
+  AssistantSection,
+  ConversationMessage,
+  UserMessage,
+} from "@/components/chat/types";
 
 import { simulateAssistantStream } from "./mockStream";
 import type { AssistantStreamPatch } from "./patch";
@@ -43,45 +47,47 @@ const seedMessages: ConversationMessage[] = [
   {
     id: "assistant-seed",
     role: "assistant",
-    headline: "Grounded response",
-    summary: "Knicks priced -134 moneyline with 57% implied; monitor Brunson's status ahead of tip.",
-    answer:
-      "The Knicks currently sit at -134 on the moneyline (~57% implied) against Brooklyn. Brunson is probable while Randle remains out; Nets list no new injuries. Maintain unit discipline—analytics only.",
-    widgets: [
+    headline: "Short answer",
+    summary:
+      "Knicks sit at -134 (1.75 decimal / 3/4 fractional). Brunson probable, Randle ruled out, Celtics report no new limitations.",
+    createdAt: "5:30 PM ET",
+    odds: {
+      american: "-134",
+      decimal: "1.75",
+      fractional: "3/4",
+      impliedProbability: "57.3%",
+    },
+    sections: [
       {
-        kind: "odds",
-        gameId: "nba-20240401-nyk-bkn",
-        moneyline: { home: -134, away: 120 },
-        implied: { home: 0.57, away: 0.45 },
+        id: "key-stats",
+        title: "Key stats",
+        items: [
+          "NYK 7-3 in last 10 · Opp PPG allowed: 109.8",
+          "Celtics offense 118.5 rating over same stretch",
+        ],
       },
       {
-        kind: "injuries",
-        team: "nyk",
-        list: [
-          { player: "Julius Randle", status: "Out", impact: "High" },
-          { player: "Jalen Brunson", status: "Probable" },
+        id: "assumptions",
+        title: "Assumptions",
+        items: [
+          "Line captured at 5:45 PM ET from primary odds feed",
+          "Injury report refreshed 5:30 PM ET with league data",
+        ],
+      },
+      {
+        id: "timestamps",
+        title: "Timestamps",
+        items: [
+          "Odds API sync 2 minutes ago",
+          "Backup provider verified 90 seconds ago",
         ],
       },
     ],
     sources: [
-      {
-        provider: "mock",
-        endpoint: "odds",
-        ids: ["nba-20240401-nyk-bkn"],
-        fetchedAt: new Date().toISOString(),
-      },
-      {
-        provider: "mock",
-        endpoint: "injuries",
-        ids: ["nyk"],
-        fetchedAt: new Date().toISOString(),
-      },
+      { id: "odds-api", label: "Odds API" },
+      { id: "nba-injuries", label: "NBA.com injuries" },
     ],
-    confidence: 0.62,
-    caveats: ["Odds move quickly—refresh before placing action."],
     status: "complete",
-    warnings: ["Analytics only. Bet responsibly (21+)."],
-    createdAt: "5:30 PM ET",
   },
 ];
 
@@ -114,7 +120,34 @@ const createInitialSession = (): ChatSession => {
   };
 };
 
-const applyPatchToAssistant = (message: AssistantMessage, patch: AssistantStreamPatch): AssistantMessage => {
+const mergeSections = (
+  existing: readonly AssistantSection[] | undefined,
+  incoming: readonly AssistantSection[] | undefined,
+  single?: AssistantSection
+): readonly AssistantSection[] | undefined => {
+  if (incoming) {
+    return [...incoming];
+  }
+
+  if (!single) {
+    return existing;
+  }
+
+  const current = existing ? [...existing] : [];
+  const index = current.findIndex((section) => section.id === single.id);
+  if (index >= 0) {
+    current[index] = single;
+    return current;
+  }
+
+  current.push(single);
+  return current;
+};
+
+const applyPatchToAssistant = (
+  message: AssistantMessage,
+  patch: AssistantStreamPatch
+): AssistantMessage => {
   const summary =
     patch.summary !== undefined
       ? patch.summary
@@ -131,13 +164,10 @@ const applyPatchToAssistant = (message: AssistantMessage, patch: AssistantStream
     ...message,
     headline: patch.headline ?? message.headline,
     summary,
-    answer: patch.answer ?? message.answer,
-    widgets: patch.widgets ?? message.widgets,
+    odds: patch.odds ? { ...(message.odds ?? {}), ...patch.odds } : message.odds,
+    sections: mergeSections(message.sections, patch.sections, patch.section),
     sources: patch.sources ?? message.sources,
     warnings: patch.warnings ? [...patch.warnings] : message.warnings,
-    confidence: patch.confidence ?? message.confidence,
-    caveats: patch.caveats ?? message.caveats,
-    trace: patch.trace ?? message.trace,
     status: patch.status ?? message.status ?? "draft",
     error: nextError ?? undefined,
   };
@@ -188,16 +218,20 @@ const parseStreamPayload = (line: string): AssistantStreamPatch | null => {
       patch.summaryDelta = payload.summaryDelta;
     }
 
+    if (payload.odds && typeof payload.odds === "object") {
+      patch.odds = payload.odds as AssistantMessage["odds"];
+    }
+
+    if (Array.isArray(payload.sections)) {
+      patch.sections = payload.sections as AssistantSection[];
+    }
+
+    if (payload.section && typeof payload.section === "object") {
+      patch.section = payload.section as AssistantSection;
+    }
+
     if (Array.isArray(payload.sources)) {
       patch.sources = payload.sources as AssistantMessage["sources"];
-    }
-
-    if (typeof payload.answer === "string") {
-      patch.answer = payload.answer;
-    }
-
-    if (Array.isArray(payload.widgets)) {
-      patch.widgets = payload.widgets as AssistantMessage["widgets"];
     }
 
     if (Array.isArray(payload.warnings)) {
@@ -207,19 +241,6 @@ const parseStreamPayload = (line: string): AssistantStreamPatch | null => {
       } else {
         patch.warnings = [];
       }
-    }
-
-    if (typeof payload.confidence === "number") {
-      patch.confidence = payload.confidence;
-    }
-
-    if (Array.isArray(payload.caveats)) {
-      const caveats = payload.caveats.filter((item): item is string => typeof item === "string");
-      patch.caveats = caveats;
-    }
-
-    if (Array.isArray(payload.trace)) {
-      patch.trace = payload.trace as AssistantMessage["trace"];
     }
 
     if (typeof payload.status === "string") {
@@ -280,7 +301,28 @@ const readStream = async (
   }
 };
 
-const useChatSessionInternal = () => {
+const toApiMessages = (messages: readonly ConversationMessage[]) =>
+  messages.map((message) => {
+    if (message.role === "assistant") {
+      return {
+        role: message.role,
+        headline: message.headline,
+        summary: message.summary,
+        odds: message.odds,
+        sections: message.sections,
+        sources: message.sources,
+        warnings: message.warnings,
+        status: message.status,
+      };
+    }
+
+    return {
+      role: message.role,
+      content: message.content,
+    };
+  });
+
+export const useChatSession = () => {
   const [session, setSession] = useState<ChatSession>(() => {
     const stored = readStoredSession<ConversationMessage>();
     if (stored) {
@@ -364,15 +406,12 @@ const useChatSessionInternal = () => {
         id: `assistant-${createId()}`,
         role: "assistant",
         createdAt: formatTimestamp(now),
-        headline: "Grounded response",
+        headline: "Short answer",
         summary: "",
-        answer: "",
-        widgets: [],
+        odds: {},
+        sections: [],
         sources: [],
         warnings: [],
-        confidence: undefined,
-        caveats: [],
-        trace: [],
         status: "draft",
       };
 
@@ -381,6 +420,11 @@ const useChatSessionInternal = () => {
         updatedAt: nowIso,
         messages: [...sessionRef.current.messages, userMessage, assistantMessage],
       };
+
+      const conversationPayload = toApiMessages([
+        ...sessionRef.current.messages,
+        userMessage,
+      ]);
 
       sessionRef.current = nextSession;
       setSession(nextSession);
@@ -425,6 +469,7 @@ const useChatSessionInternal = () => {
                 },
                 body: JSON.stringify({
                   prompt: trimmed,
+                  conversation: conversationPayload,
                   sessionId: sessionRef.current.id,
                   sportKey: normalizedSportKey,
                   marketKey: normalizedMarketKey,
@@ -504,16 +549,6 @@ const useChatSessionInternal = () => {
     [session.messages]
   );
 
-  const latestAssistant = useMemo(() => {
-    for (let index = session.messages.length - 1; index >= 0; index -= 1) {
-      const message = session.messages[index];
-      if (message.role === "assistant") {
-        return message as AssistantMessage;
-      }
-    }
-    return undefined;
-  }, [session.messages]);
-
   const clearError = useCallback(() => setLastError(null), []);
 
   return {
@@ -522,28 +557,9 @@ const useChatSessionInternal = () => {
     sendPrompt,
     sessionId: session.id,
     hasAssistantResponse,
-    latestAssistant,
-    latestWidgets: latestAssistant?.widgets ?? [],
     lastError,
     clearError,
   } as const;
-};
-
-type ChatSessionValue = ReturnType<typeof useChatSessionInternal>;
-
-const ChatSessionContext = createContext<ChatSessionValue | null>(null);
-
-export const ChatSessionProvider = ({ children }: { children: ReactNode }) => {
-  const value = useChatSessionInternal();
-  return <ChatSessionContext.Provider value={value}>{children}</ChatSessionContext.Provider>;
-};
-
-export const useChatSession = (): ChatSessionValue => {
-  const context = useContext(ChatSessionContext);
-  if (!context) {
-    throw new Error("useChatSession must be used within a ChatSessionProvider");
-  }
-  return context;
 };
 
 export type UseChatSessionReturn = ReturnType<typeof useChatSession>;

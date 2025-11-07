@@ -1,199 +1,84 @@
-import { before, beforeEach, describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it, vi } from "vitest";
 
-import type { DeltaAnswer } from "../lib/llmClient";
+import { LlmClient } from "@/lib/llmClient";
 
-const ensureTestEnv = () => {
-  process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "test-key";
-  process.env.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL ?? "https://example.com";
-  process.env.OPENAI_MODEL = process.env.OPENAI_MODEL ?? "test-model";
-  process.env.SPORTS_VENDOR = process.env.SPORTS_VENDOR ?? "mock";
-  process.env.SPORTS_API_BASE = process.env.SPORTS_API_BASE ?? "https://api.example.com";
-  process.env.SPORTS_API_KEY = process.env.SPORTS_API_KEY ?? "";
-  process.env.FEATURE_FLAGS = process.env.FEATURE_FLAGS ?? "llm_insights,line_movements";
-  process.env.CACHE_TTL_SECONDS = process.env.CACHE_TTL_SECONDS ?? "30";
-};
-
-let runDeltaConversation: typeof import("../lib/llmClient").runDeltaConversation;
-
-before(() => {
-  ensureTestEnv();
-  ({ runDeltaConversation } = require("../lib/llmClient"));
-});
-
-class MockCompletions {
-  responses: Array<any> = [];
-  calls: Array<any> = [];
-
-  queue(response: any) {
-    this.responses.push(response);
-  }
-
-  reset() {
-    this.responses = [];
-    this.calls = [];
-  }
-
-  async create(args: any) {
-    this.calls.push(args);
-    const response = this.responses.shift();
-    if (!response) {
-      throw new Error("No mock completion response available");
-    }
-    return response;
-  }
-}
-
-type MockToolResult<T> = {
-  id: string;
-  ok: boolean;
-  cacheHit: boolean;
-  durationMs: number;
-  data: T | null;
-};
-
-describe("runDeltaConversation", () => {
-  const completions = new MockCompletions();
-  const client = { chat: { completions } } as const;
-
-  const mockOdds: MockToolResult<any> = {
-    id: "tool-1",
-    ok: true,
-    cacheHit: false,
-    durationMs: 12,
-    data: {
-      gameId: "nba-20240401-nyk-bkn",
-      market: "moneyline" as const,
-      moneyline: { home: -120, away: 110 },
-      implied: { home: 0.55, away: 0.47 },
-      fetchedAt: new Date().toISOString(),
-      provider: "mock",
-      endpoint: "odds",
-      ids: ["nba-20240401-nyk-bkn"],
-    },
-  };
-
-  const mockInjuries: MockToolResult<any> = {
-    id: "tool-2",
-    ok: true,
-    cacheHit: false,
-    durationMs: 10,
-    data: {
-      team: "nyk",
-      list: [{ player: "Julius Randle", status: "Out" }],
-      fetchedAt: new Date().toISOString(),
-      provider: "mock",
-      endpoint: "injuries",
-      ids: ["nyk"],
-    },
-  };
-
-  beforeEach(() => {
-    completions.reset();
-    completions.queue({
-      choices: [
-        {
-          message: {
-            tool_calls: [
-              {
-                id: "call-1",
-                function: {
-                  name: "getOdds",
-                  arguments: JSON.stringify({ gameId: "nba-20240401-nyk-bkn", market: "moneyline" }),
-                },
-              },
-              {
-                id: "call-2",
-                function: {
-                  name: "getInjuries",
-                  arguments: JSON.stringify({ team: "nyk" }),
-                },
-              },
-            ],
-          },
-        },
-      ],
-    });
-
-    completions.queue({
-      choices: [
-        {
-          message: {
-            content: JSON.stringify({
-              answer: "Mock answer",
-              widgets: [
-                { kind: "odds", gameId: "nba-20240401-nyk-bkn" },
-                {
-                  kind: "injuries",
-                  team: "nyk",
-                  list: [{ player: "Julius Randle", status: "Out" }],
-                },
-              ],
-              sources: [
-                {
-                  provider: "mock",
-                  endpoint: "odds",
-                  ids: ["nba-20240401-nyk-bkn"],
-                  fetchedAt: new Date().toISOString(),
-                },
-              ],
-              confidence: 0.6,
-            } satisfies DeltaAnswer),
-          },
-        },
-      ],
-    });
-  });
-
-  it("returns grounded answer and trace", async () => {
-    const result = await runDeltaConversation("Test prompt", {
-      client,
-      tools: {
-        callOddsTool: async () => mockOdds,
-        callStatsTool: async () => ({ id: "tool-3", ok: true, cacheHit: false, durationMs: 9, data: null }),
-        callInjuriesTool: async () => mockInjuries,
+describe("LLM orchestrator", () => {
+  it("stores assistant tool calls before requesting the next completion", async () => {
+    const toolCall = {
+      id: "tool-call-id",
+      type: "function" as const,
+      function: {
+        name: "fetchWeather",
+        arguments: JSON.stringify({ city: "New York" }),
       },
+    };
+
+    const callModel = vi
+      .fn()
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant" as const,
+          content: "I'll check the weather.",
+          tool_calls: [toolCall],
+        },
+      })
+      .mockResolvedValueOnce({
+        message: {
+          role: "assistant" as const,
+          content: "It's sunny and 75°F.",
+        },
+      });
+
+    const toolHandler = vi.fn().mockResolvedValue("Sunny with 75°F highs.");
+
+    const client = new LlmClient({
+      callModel: async (messages) => callModel(messages),
+      tools: { fetchWeather: toolHandler },
     });
 
-    assert.ok(result.answer.widgets);
-    assert.equal(result.answer.widgets?.length, 2);
-    assert.ok(result.trace.length > 0);
-  });
+    const finalMessage = await client.send("What's the weather?");
 
-  it("persists assistant tool call message before next completion", async () => {
-    await runDeltaConversation("Test prompt", {
-      client,
-      tools: {
-        callOddsTool: async () => mockOdds,
-        callStatsTool: async () => ({ id: "tool-3", ok: true, cacheHit: false, durationMs: 9, data: null }),
-        callInjuriesTool: async () => mockInjuries,
+    expect(finalMessage.content).toBe("It's sunny and 75°F.");
+    expect(callModel).toHaveBeenCalledTimes(2);
+    expect(toolHandler).toHaveBeenCalledWith({
+      id: toolCall.id,
+      name: toolCall.function.name,
+      arguments: toolCall.function.arguments,
+      message: toolCall.function,
+    });
+
+    const secondCallHistory = callModel.mock.calls[1][0];
+    expect(secondCallHistory).toEqual([
+      { role: "user", content: "What's the weather?" },
+      {
+        role: "assistant",
+        content: "I'll check the weather.",
+        tool_calls: [toolCall],
       },
-    });
+      {
+        role: "tool",
+        content: "Sunny with 75°F highs.",
+        tool_call_id: toolCall.id,
+      },
+    ]);
 
-    assert.ok(completions.calls.length >= 2);
-
-    const latestCallArgs = completions.calls[completions.calls.length - 1];
-    assert.ok(Array.isArray(latestCallArgs.messages));
-    assert.equal(latestCallArgs.messages.length, 5);
-
-    const [systemTurn, userTurn, assistantTurn, firstTool, secondTool] = latestCallArgs.messages;
-
-    assert.equal(systemTurn.role, "system");
-    assert.equal(userTurn.role, "user");
-
-    assert.equal(assistantTurn.role, "assistant");
-    assert.ok(Array.isArray(assistantTurn.tool_calls));
-    assert.deepEqual(
-      assistantTurn.tool_calls.map((call: any) => call.id),
-      ["call-1", "call-2"],
-    );
-
-    assert.equal(firstTool.role, "tool");
-    assert.equal(firstTool.tool_call_id, "call-1");
-    assert.equal(firstTool.name, "getOdds");
-
-    assert.equal(secondTool.role, "tool");
-    assert.equal(secondTool.tool_call_id, "call-2");
-    assert.equal(secondTool.name, "getInjuries");
+    expect(client.history).toEqual([
+      { role: "user", content: "What's the weather?" },
+      {
+        role: "assistant",
+        content: "I'll check the weather.",
+        tool_calls: [toolCall],
+      },
+      {
+        role: "tool",
+        content: "Sunny with 75°F highs.",
+        tool_call_id: toolCall.id,
+      },
+      {
+        role: "assistant",
+        content: "It's sunny and 75°F.",
+        tool_calls: undefined,
+      },
+    ]);
   });
 });

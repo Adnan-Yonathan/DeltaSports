@@ -29,38 +29,33 @@ const waitFor = (ms: number, signal: AbortSignal) =>
     signal.addEventListener("abort", abortListener);
   });
 
-const simulatedSections = [
+const simulatedWidgets = [
   {
-    id: "key-stats",
-    title: "Key stats",
-    items: [
-      "NYK 7-3 in last 10 · Opp PPG allowed: 109.8",
-      "Celtics offense rating: 118.5 over last 10"
-    ] as const
+    kind: "odds" as const,
+    gameId: "sim-nba-nyk-bkn",
+    moneyline: { home: -132, away: 118 },
+    implied: { home: 0.57, away: 0.46 },
   },
   {
-    id: "assumptions",
-    title: "Assumptions",
-    items: [
-      "Primary line captured 6 minutes ago",
-      "Backup odds within 0.5% EV delta",
-      "Injury report timestamped 15 minutes prior"
-    ] as const
+    kind: "playerForm" as const,
+    playerId: "sim-jokic",
+    stat: "rebounds",
+    points: [15, 13, 11, 16, 14],
+    summary: "Jokic is averaging 13.8 rebounds across his last five with two 15+ efforts.",
   },
   {
-    id: "timestamps",
-    title: "Timestamps",
-    items: [
-      "Odds API sync 2 minutes ago",
-      "Backup provider verified 90 seconds ago"
-    ] as const
-  }
+    kind: "injuries" as const,
+    team: "nyk",
+    list: [
+      { player: "Julius Randle", status: "Out", impact: "High" },
+      { player: "Jalen Brunson", status: "Questionable", impact: "Medium" },
+    ],
+  },
 ] as const;
 
 const simulatedSources = [
-  { id: "odds-api", label: "Odds API" },
-  { id: "nba-injuries", label: "NBA.com injuries" },
-  { id: "gpt-backfill", label: "GPT-4o backup" }
+  { provider: "mock", endpoint: "odds", ids: ["sim-nba-nyk-bkn"], fetchedAt: new Date().toISOString() },
+  { provider: "mock", endpoint: "injuries", ids: ["nyk"], fetchedAt: new Date().toISOString() },
 ] as const;
 
 export const simulateAssistantStream = async ({
@@ -71,7 +66,7 @@ export const simulateAssistantStream = async ({
   const start = performance.now();
 
   const steps: readonly { delay: number; patch: AssistantStreamPatch }[] = [
-    { delay: 220, patch: { headline: "Short answer" } },
+    { delay: 220, patch: { headline: "Grounded response" } },
     {
       delay: 320,
       patch: {
@@ -82,30 +77,23 @@ export const simulateAssistantStream = async ({
       delay: 420,
       patch: {
         summaryDelta:
-          "Knicks sit at -134 with Brunson probable, Randle out, Celtics clean report. "
+          "Knicks sit near -134 with Brunson leaning in, Randle still sidelined. "
       }
     },
     {
       delay: 520,
       patch: {
-        odds: {
-          american: "-134",
-          decimal: "1.75",
-          fractional: "3/4",
-          impliedProbability: "57.3%"
-        }
-      }
-    },
-    {
-      delay: 620,
-      patch: {
-        sections: simulatedSections
+        answer:
+          "Knicks moneyline sits around -132 (57% implied) while Brooklyn floats at +118. Jokic is averaging 13.8 rebounds in his last five; Knicks list Randle out and Brunson questionable. Analytics only—bet responsibly.",
       }
     },
     {
       delay: 720,
       patch: {
-        sources: simulatedSources
+        widgets: simulatedWidgets,
+        sources: simulatedSources,
+        confidence: 0.6,
+        caveats: ["Simulated response"],
       }
     }
   ];

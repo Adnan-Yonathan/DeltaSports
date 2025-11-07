@@ -11,7 +11,11 @@
     "verify-env": "node ../scripts/verify-env.mjs",
     "test-api-keys": "node ../scripts/test-api-keys.mjs",
     "setup-supabase": "bash ../scripts/setup-supabase.sh",
-    "check-config": "npm run verify-env && npm run test-api-keys"
+    "check-config": "npm run verify-env && npm run test-api-keys",
+    "deploy-functions": "bash ../scripts/deploy-functions.sh",
+    "test-functions": "node ../scripts/test-functions.mjs",
+    "test-integration": "node ../scripts/test-integration.mjs",
+    "test-all": "npm run check-config && npm run test-functions && npm run test-integration"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

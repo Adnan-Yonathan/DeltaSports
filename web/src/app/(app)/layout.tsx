@@ -1,10 +1,50 @@
 'use client';
 
 import { Sidebar } from '@/components/chat/Sidebar';
+import { useSupabaseAuth } from '@/components/auth/SupabaseAuthProvider';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 import type { ReactNode } from 'react';
-import { Suspense } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+
+type TonePreference = 'neutral' | 'confident' | 'cautious';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  const { userProfile } = useSupabaseAuth();
+  const supabase = getSupabaseClient();
+  const [currentTone, setCurrentTone] = useState<TonePreference>('neutral');
+
+  useEffect(() => {
+    if (userProfile?.tone_preference) {
+      setCurrentTone(userProfile.tone_preference);
+    }
+  }, [userProfile]);
+
+  const handleToneChange = useCallback(
+    async (newTone: TonePreference) => {
+      if (!userProfile) {
+        return;
+      }
+
+      setCurrentTone(newTone);
+
+      try {
+        const { error } = await supabase
+          .from('user_profiles')
+          .update({ tone_preference: newTone })
+          .eq('id', userProfile.id);
+
+        if (error) {
+          console.error('Failed to update tone preference', error);
+          setCurrentTone(userProfile.tone_preference);
+        }
+      } catch (error) {
+        console.error('Error updating tone preference', error);
+        setCurrentTone(userProfile.tone_preference);
+      }
+    },
+    [userProfile, supabase]
+  );
+
   return (
     <section className="flex h-full w-full gap-6">
       <Suspense

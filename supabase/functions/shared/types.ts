@@ -1,9 +1,12 @@
+export type TonePreference = 'neutral' | 'confident' | 'cautious';
+
 export type UserProfile = {
   id: string;
   auth_user_id: string;
   preferred_timezone: string | null;
   favorite_sports: string[] | null;
   bankroll_goal: number | null;
+  tone_preference: TonePreference | null;
   created_at: string;
   updated_at: string;
 };

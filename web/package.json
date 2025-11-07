@@ -7,7 +7,18 @@
     "build": "PATH=../scripts/bin:$PATH; next build && next export && node ../scripts/sync-next-output.mjs",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest"
+    "test": "vitest",
+    "verify-env": "node ../scripts/verify-env.mjs",
+    "test-api-keys": "node ../scripts/test-api-keys.mjs",
+    "setup-supabase": "bash ../scripts/setup-supabase.sh",
+    "check-config": "npm run verify-env && npm run test-api-keys",
+    "deploy-functions": "bash ../scripts/deploy-functions.sh",
+    "test-functions": "node ../scripts/test-functions.mjs",
+    "test-integration": "node ../scripts/test-integration.mjs",
+    "verify-deployment": "node ../scripts/verify-deployment.mjs",
+    "test-all": "npm run check-config && npm run test-functions && npm run test-integration",
+    "prepare-vercel": "bash ../scripts/prepare-vercel.sh",
+    "verify-production": "node ../scripts/verify-production.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -20,6 +31,7 @@
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "autoprefixer": "10.4.17",
+    "dotenv": "^16.4.5",
     "eslint": "8.57.0",
     "eslint-config-next": "14.2.3",
     "patch-package": "^8.0.0",

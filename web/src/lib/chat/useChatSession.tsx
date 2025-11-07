@@ -12,6 +12,8 @@ import type {
 import { simulateAssistantStream } from "./mockStream";
 import type { AssistantStreamPatch } from "./patch";
 import { persistStoredSession, readStoredSession } from "./storage";
+import { createChatSession, saveChatMessage, updateChatSession, generateSessionTitle, loadChatMessages } from "./chatPersistence";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 const chatMode = process.env.NEXT_PUBLIC_CHAT_MODE ?? "api";
 
@@ -20,6 +22,8 @@ type ChatSession = {
   createdAt: string;
   updatedAt: string;
   messages: ConversationMessage[];
+  dbSessionId?: string; // Supabase database session ID
+  userId?: string; // User ID for database persistence
 };
 
 type SendPromptArgs = {
@@ -27,6 +31,8 @@ type SendPromptArgs = {
   quickPromptId?: string;
   sportKey?: string;
   marketKey?: string;
+  userProfileId?: string;
+  tonePreference?: 'neutral' | 'confident' | 'cautious';
 };
 
 const timestampFormatter = new Intl.DateTimeFormat("en-US", {
@@ -382,7 +388,7 @@ export const useChatSession = () => {
   }, []);
 
   const sendPrompt = useCallback(
-    ({ prompt, quickPromptId, sportKey, marketKey }: SendPromptArgs) => {
+    ({ prompt, quickPromptId, sportKey, marketKey, userProfileId, tonePreference }: SendPromptArgs) => {
       const trimmed = prompt.trim();
       if (!trimmed || streamingRef.current) {
         return;
@@ -392,6 +398,9 @@ export const useChatSession = () => {
         typeof sportKey === "string" && sportKey.trim().length > 0 ? sportKey.trim() : undefined;
       const normalizedMarketKey =
         typeof marketKey === "string" && marketKey.trim().length > 0 ? marketKey.trim() : undefined;
+      const normalizedUserProfileId =
+        typeof userProfileId === "string" && userProfileId.trim().length > 0 ? userProfileId.trim() : undefined;
+      const normalizedTonePreference = tonePreference ?? 'neutral';
 
       const now = new Date();
       const nowIso = now.toISOString();
@@ -419,6 +428,7 @@ export const useChatSession = () => {
         ...sessionRef.current,
         updatedAt: nowIso,
         messages: [...sessionRef.current.messages, userMessage, assistantMessage],
+        userId: normalizedUserProfileId ?? sessionRef.current.userId,
       };
 
       const conversationPayload = toApiMessages([
@@ -459,6 +469,7 @@ export const useChatSession = () => {
       };
 
       const execute = async () => {
+        let streamingSuccessful = false;
         try {
           if (chatMode === "api") {
             try {
@@ -473,6 +484,8 @@ export const useChatSession = () => {
                   sessionId: sessionRef.current.id,
                   sportKey: normalizedSportKey,
                   marketKey: normalizedMarketKey,
+                  userProfileId: normalizedUserProfileId,
+                  tonePreference: normalizedTonePreference,
                   quickPromptId,
                 }),
                 signal: controller.signal,
@@ -485,6 +498,7 @@ export const useChatSession = () => {
                   controller.signal
                 );
                 applyPatch(assistantMessage.id, { status: "complete" });
+                streamingSuccessful = true;
                 return;
               }
 
@@ -529,9 +543,61 @@ export const useChatSession = () => {
             }
           } else {
             await runSimulator();
+            streamingSuccessful = true;
           }
         } finally {
           finishStreaming();
+
+          // Persist to database if streaming was successful and user is authenticated
+          if (streamingSuccessful && normalizedUserProfileId) {
+            (async () => {
+              try {
+                // Create database session if this is the first real message (excluding seed messages)
+                const realMessages = sessionRef.current.messages.filter(
+                  (m) => !m.id.includes('seed')
+                );
+
+                if (!sessionRef.current.dbSessionId && realMessages.length === 2) {
+                  // First real exchange - create session in database
+                  const title = generateSessionTitle(trimmed);
+                  const dbSession = await createChatSession(normalizedUserProfileId, title);
+
+                  if (dbSession) {
+                    setSession((prev) => ({
+                      ...prev,
+                      dbSessionId: dbSession.id,
+                      userId: normalizedUserProfileId,
+                    }));
+                    sessionRef.current.dbSessionId = dbSession.id;
+                    sessionRef.current.userId = normalizedUserProfileId;
+                  }
+                }
+
+                // Save messages to database if we have a dbSessionId
+                if (sessionRef.current.dbSessionId) {
+                  await saveChatMessage(sessionRef.current.dbSessionId, userMessage);
+
+                  // Get the latest assistant message from the session
+                  const latestAssistant = sessionRef.current.messages.find(
+                    (m) => m.id === assistantMessage.id
+                  );
+                  if (latestAssistant) {
+                    await saveChatMessage(sessionRef.current.dbSessionId, latestAssistant);
+                  }
+
+                  // Update session timestamp
+                  await updateChatSession(sessionRef.current.dbSessionId, {
+                    last_message_at: nowIso,
+                  });
+                }
+              } catch (dbError) {
+                // Don't fail the entire operation if database persistence fails
+                if (process.env.NODE_ENV === "development") {
+                  console.warn("Failed to persist chat to database", dbError);
+                }
+              }
+            })();
+          }
         }
       };
 

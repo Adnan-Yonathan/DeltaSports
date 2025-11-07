@@ -6,6 +6,7 @@ import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import type { OddsFormat, QuickPrompt } from "./types";
 import { useChatSession } from "@/lib/chat/useChatSession";
+import { useSupabaseAuth } from "@/components/auth/SupabaseAuthProvider";
 
 const quickPrompts: readonly QuickPrompt[] = [
   {
@@ -49,6 +50,7 @@ const marketOptions = [
 ] as const;
 
 export function ConversationPane() {
+  const { userProfile } = useSupabaseAuth();
   const [composerValue, setComposerValue] = useState("");
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>("american");
   const [selectedSportKey, setSelectedSportKey] = useState<string>(sportOptions[0]?.value ?? "basketball_nba");
@@ -68,9 +70,11 @@ export function ConversationPane() {
         quickPromptId,
         sportKey: selectedSportKey,
         marketKey: selectedMarketKey,
+        userProfileId: userProfile?.id,
+        tonePreference: userProfile?.tone_preference,
       });
     },
-    [selectedMarketKey, selectedSportKey, sendPrompt]
+    [selectedMarketKey, selectedSportKey, sendPrompt, userProfile]
   );
 
   const handleOddsFormatChange = useCallback(

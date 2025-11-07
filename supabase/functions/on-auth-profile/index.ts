@@ -112,6 +112,7 @@ export const handler = async (req: Request): Promise<Response> => {
     preferred_timezone: preferredTimezone,
     favorite_sports: favoriteSports,
     bankroll_goal: bankrollGoal,
+    tone_preference: "neutral",
   };
 
   const { data: profile, error } = await supabase

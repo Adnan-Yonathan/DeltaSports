@@ -171,6 +171,12 @@ export const runDeltaConversation = async (
     const message = choice.message;
 
     if (message.tool_calls && message.tool_calls.length > 0) {
+      messages.push({
+        role: "assistant",
+        content: typeof message.content === "string" ? message.content : "",
+        tool_calls: message.tool_calls,
+      });
+
       for (const toolCall of message.tool_calls) {
         if (!toolCall.function) continue;
         const args = JSON.parse(toolCall.function.arguments ?? "{}") as Record<string, unknown>;

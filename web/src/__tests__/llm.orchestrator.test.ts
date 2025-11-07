@@ -126,4 +126,24 @@ describe("runDeltaConversation", () => {
     expect(result.answer.widgets).toHaveLength(2);
     expect(result.trace.length).toBeGreaterThan(0);
   });
+
+  it("persists assistant tool call message before next completion", async () => {
+    await runDeltaConversation("Test prompt");
+
+    expect(completionSpy).toHaveBeenCalledTimes(2);
+    const firstCallArgs = completionSpy.mock.calls[0][0];
+    const secondCallArgs = completionSpy.mock.calls[1][0];
+
+    expect(firstCallArgs.messages).toHaveLength(2); // system + user
+    expect(secondCallArgs.messages).toHaveLength(5);
+    expect(secondCallArgs.messages[2]).toMatchObject({
+      role: "assistant",
+      tool_calls: [
+        expect.objectContaining({ id: "call-1" }),
+        expect.objectContaining({ id: "call-2" }),
+      ],
+    });
+    expect(secondCallArgs.messages[3]).toMatchObject({ role: "tool", tool_call_id: "call-1" });
+    expect(secondCallArgs.messages[4]).toMatchObject({ role: "tool", tool_call_id: "call-2" });
+  });
 });

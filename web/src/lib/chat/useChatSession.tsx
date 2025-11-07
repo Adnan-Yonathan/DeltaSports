@@ -27,6 +27,8 @@ type SendPromptArgs = {
   quickPromptId?: string;
   sportKey?: string;
   marketKey?: string;
+  userProfileId?: string;
+  tonePreference?: 'neutral' | 'confident' | 'cautious';
 };
 
 const timestampFormatter = new Intl.DateTimeFormat("en-US", {
@@ -382,7 +384,7 @@ export const useChatSession = () => {
   }, []);
 
   const sendPrompt = useCallback(
-    ({ prompt, quickPromptId, sportKey, marketKey }: SendPromptArgs) => {
+    ({ prompt, quickPromptId, sportKey, marketKey, userProfileId, tonePreference }: SendPromptArgs) => {
       const trimmed = prompt.trim();
       if (!trimmed || streamingRef.current) {
         return;
@@ -392,6 +394,9 @@ export const useChatSession = () => {
         typeof sportKey === "string" && sportKey.trim().length > 0 ? sportKey.trim() : undefined;
       const normalizedMarketKey =
         typeof marketKey === "string" && marketKey.trim().length > 0 ? marketKey.trim() : undefined;
+      const normalizedUserProfileId =
+        typeof userProfileId === "string" && userProfileId.trim().length > 0 ? userProfileId.trim() : undefined;
+      const normalizedTonePreference = tonePreference ?? 'neutral';
 
       const now = new Date();
       const nowIso = now.toISOString();
@@ -473,6 +478,8 @@ export const useChatSession = () => {
                   sessionId: sessionRef.current.id,
                   sportKey: normalizedSportKey,
                   marketKey: normalizedMarketKey,
+                  userProfileId: normalizedUserProfileId,
+                  tonePreference: normalizedTonePreference,
                   quickPromptId,
                 }),
                 signal: controller.signal,

@@ -19,6 +19,9 @@ create type bet_status as enum ('pending', 'won', 'lost', 'push', 'void');
 
 -- Identify how an alert was generated
 create type alert_origin as enum ('model', 'creator', 'manual');
+
+-- AI assistant tone preferences
+create type tone_preference as enum ('neutral', 'confident', 'cautious');
 ```
 
 ## 3. Core Profiles
@@ -30,13 +33,44 @@ create table if not exists public.user_profiles (
   preferred_timezone text default 'UTC',
   favorite_sports text[] default array[]::text[],
   bankroll_goal numeric(12,2),
+  tone_preference tone_preference not null default 'neutral',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique(auth_user_id)
 );
 ```
 
-## 4. Bankroll Tracking
+## 4. Chat History
+```sql
+-- Persistent chat sessions linked to users
+create table if not exists public.chat_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.user_profiles (id) on delete cascade,
+  title text,
+  last_message_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Individual messages within chat sessions
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.chat_sessions (id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  content jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+-- Index for efficient message retrieval
+create index if not exists idx_chat_messages_session
+  on public.chat_messages (session_id, created_at);
+
+-- Index for user's session list
+create index if not exists idx_chat_sessions_user
+  on public.chat_sessions (user_id, last_message_at desc);
+```
+
+## 5. Bankroll Tracking
 ```sql
 -- Track bankroll accounts a bettor manages
 create table if not exists public.bankroll_accounts (
@@ -79,7 +113,7 @@ create table if not exists public.bet_tags (
 );
 ```
 
-## 5. Edge Intelligence
+## 6. Edge Intelligence
 ```sql
 -- Alerts emitted from the value models or creators
 create table if not exists public.edge_alerts (
@@ -109,7 +143,7 @@ create table if not exists public.alert_events (
 );
 ```
 
-## 6. Creator Network
+## 7. Creator Network
 ```sql
 -- Registered creators that bettors can follow
 create table if not exists public.creator_profiles (
@@ -144,7 +178,7 @@ create table if not exists public.creator_subscriptions (
 );
 ```
 
-## 7. Utility Trigger
+## 8. Utility Triggers
 ```sql
 -- Keep updated_at columns current without manual writes
 create or replace function public.set_updated_at()
@@ -165,6 +199,10 @@ for each row execute procedure public.set_updated_at();
 
 create trigger bets_updated
 before update on public.bets
+for each row execute procedure public.set_updated_at();
+
+create trigger chat_sessions_updated
+before update on public.chat_sessions
 for each row execute procedure public.set_updated_at();
 ```
 

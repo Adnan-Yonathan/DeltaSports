@@ -2,19 +2,53 @@
 
 import { Sidebar } from '@/components/chat/Sidebar';
 import { useSupabaseAuth } from '@/components/auth/SupabaseAuthProvider';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { Suspense, useCallback, useEffect, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+
+type TonePreference = 'neutral' | 'confident' | 'cautious';
 
 function CommandCenterGuard({ children }: { children: ReactNode }) {
-  const { session, loading, signOut } = useSupabaseAuth();
+  const { session, userProfile, loading, signOut } = useSupabaseAuth();
   const router = useRouter();
+  const supabase = getSupabaseClient();
+  const [currentTone, setCurrentTone] = useState<TonePreference>('neutral');
 
   useEffect(() => {
     if (!loading && !session) {
       router.replace('/sign-in');
     }
   }, [loading, router, session]);
+
+  useEffect(() => {
+    if (userProfile?.tone_preference) {
+      setCurrentTone(userProfile.tone_preference);
+    }
+  }, [userProfile]);
+
+  const handleToneChange = useCallback(async (newTone: TonePreference) => {
+    if (!userProfile) {
+      return;
+    }
+
+    setCurrentTone(newTone);
+
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ tone_preference: newTone })
+        .eq('id', userProfile.id);
+
+      if (error) {
+        console.error('Failed to update tone preference', error);
+        setCurrentTone(userProfile.tone_preference);
+      }
+    } catch (error) {
+      console.error('Error updating tone preference', error);
+      setCurrentTone(userProfile.tone_preference);
+    }
+  }, [userProfile, supabase]);
 
   const handleSignOut = useCallback(async () => {
     const { error } = await signOut();
@@ -70,22 +104,37 @@ function CommandCenterGuard({ children }: { children: ReactNode }) {
               <div className="flex overflow-hidden rounded-lg border border-white/10 bg-white/5 text-xs">
                 <button
                   type="button"
-                  className="px-3 py-1 font-medium text-white"
-                  aria-pressed="true"
+                  className={`px-3 py-1 font-medium transition ${
+                    currentTone === 'neutral'
+                      ? 'bg-brand-accent text-black'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  aria-pressed={currentTone === 'neutral'}
+                  onClick={() => handleToneChange('neutral')}
                 >
                   Neutral
                 </button>
                 <button
                   type="button"
-                  className="px-3 py-1 text-slate-300 transition hover:bg-white/10 hover:text-white"
-                  aria-pressed="false"
+                  className={`px-3 py-1 font-medium transition ${
+                    currentTone === 'confident'
+                      ? 'bg-brand-accent text-black'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  aria-pressed={currentTone === 'confident'}
+                  onClick={() => handleToneChange('confident')}
                 >
                   Confident
                 </button>
                 <button
                   type="button"
-                  className="px-3 py-1 text-slate-300 transition hover:bg-white/10 hover:text-white"
-                  aria-pressed="false"
+                  className={`px-3 py-1 font-medium transition ${
+                    currentTone === 'cautious'
+                      ? 'bg-brand-accent text-black'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  aria-pressed={currentTone === 'cautious'}
+                  onClick={() => handleToneChange('cautious')}
                 >
                   Cautious
                 </button>

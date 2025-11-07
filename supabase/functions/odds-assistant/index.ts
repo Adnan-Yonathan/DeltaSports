@@ -13,6 +13,7 @@ type OddsAssistantPayload = {
   oddsFormat?: "american" | "decimal" | "fractional";
   model?: string;
   userProfileId?: string;
+  tonePreference?: "neutral" | "confident" | "cautious";
 };
 
 type NormalizedOutcome = {
@@ -307,8 +308,18 @@ async function generateModelSummary(params: {
   oddsSnapshot: OddsSnapshot;
   bettorContext: BettorContext | null;
   model?: string;
+  tonePreference?: "neutral" | "confident" | "cautious";
 }): Promise<string> {
-  const systemPrompt = "You are DeltaSports' odds assistant. Use the provided betting context and odds snapshot to give actionable, responsible guidance. Highlight any value, but avoid guaranteeing outcomes.";
+  const baseTone = "You are DeltaSports' odds assistant. Use the provided betting context and odds snapshot to give actionable, responsible guidance.";
+
+  const toneModifiers: Record<string, string> = {
+    neutral: "Provide balanced analysis, highlight value opportunities while noting risks. Maintain an objective, data-driven tone.",
+    confident: "Emphasize strong opportunities and edge. Use assertive language while still noting key risks. Project conviction in high-value plays.",
+    cautious: "Emphasize risk management and downside scenarios. Use conservative language and stress the importance of bankroll discipline. Highlight uncertainty and variance."
+  };
+
+  const selectedTone = params.tonePreference ?? "neutral";
+  const systemPrompt = `${baseTone} ${toneModifiers[selectedTone]} Always avoid guaranteeing outcomes.`;
 
   const contextPayload: Record<string, unknown> = {
     odds_snapshot: params.oddsSnapshot,
@@ -435,6 +446,7 @@ export const handler = async (req: Request): Promise<Response> => {
       oddsSnapshot,
       bettorContext,
       model: payload.model,
+      tonePreference: payload.tonePreference,
     });
   } catch (error) {
     console.error("odds-assistant: failed to generate model summary", error);

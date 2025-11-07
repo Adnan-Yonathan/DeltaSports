@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
   const sportKey = toStringOrUndefined(body.sportKey) ?? DEFAULT_SPORT_KEY;
   const marketKey = toStringOrUndefined(body.marketKey);
   const userProfileId = toStringOrUndefined(body.userProfileId);
+  const tonePreference = toStringOrUndefined(body.tonePreference) ?? 'neutral';
   const quickPromptId = toStringOrUndefined(body.quickPromptId);
 
   const env = requiredEnv();
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
         sportKey,
         markets: marketKey,
         userProfileId,
+        tonePreference,
         sessionId,
         quickPromptId,
       }),

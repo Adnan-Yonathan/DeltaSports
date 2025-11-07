@@ -3,7 +3,7 @@
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 type SignInOptions = {
   emailRedirectTo?: string;
@@ -28,7 +28,17 @@ type SupabaseAuthContextValue = {
     email: string,
     options?: SignInOptions
   ) => ReturnType<ReturnType<typeof getSupabaseClient>['auth']['signInWithOtp']>;
+  signInWithPassword: (
+    email: string,
+    password: string
+  ) => ReturnType<ReturnType<typeof getSupabaseClient>['auth']['signInWithPassword']>;
+  signUpWithPassword: (
+    email: string,
+    password: string,
+    metadata?: { full_name?: string }
+  ) => ReturnType<ReturnType<typeof getSupabaseClient>['auth']['signUp']>;
   signOut: () => ReturnType<ReturnType<typeof getSupabaseClient>['auth']['signOut']>;
+  refreshUserProfile: () => Promise<void>;
 };
 
 const SupabaseAuthContext = createContext<SupabaseAuthContextValue | undefined>(
@@ -96,41 +106,43 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [supabase]);
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchUserProfile = useCallback(async () => {
+    if (!session?.user?.id) {
+      setUserProfile(null);
+      return;
+    }
 
-    const fetchUserProfile = async () => {
-      if (!session?.user?.id) {
-        setUserProfile(null);
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Failed to fetch user profile', error);
         return;
       }
 
-      try {
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('auth_user_id', session.user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error('Failed to fetch user profile', error);
-          return;
-        }
-
-        if (isMounted && data) {
-          setUserProfile(data as UserProfile);
-        }
-      } catch (error) {
-        console.error('Error fetching user profile', error);
+      if (data) {
+        setUserProfile(data as UserProfile);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching user profile', error);
+    }
+  }, [session, supabase]);
 
-    void fetchUserProfile();
+  useEffect(() => {
+    let isMounted = true;
+
+    if (isMounted) {
+      void fetchUserProfile();
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [session, supabase]);
+  }, [fetchUserProfile]);
 
   const value = useMemo<SupabaseAuthContextValue>(
     () => ({
@@ -147,9 +159,25 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
           options: signInOptions
         });
       },
-      signOut: () => supabase.auth.signOut()
+      signInWithPassword: (email: string, password: string) => {
+        return supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+      },
+      signUpWithPassword: (email: string, password: string, metadata?: { full_name?: string }) => {
+        return supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: metadata || {}
+          }
+        });
+      },
+      signOut: () => supabase.auth.signOut(),
+      refreshUserProfile: fetchUserProfile
     }),
-    [loading, session, userProfile, supabase]
+    [loading, session, userProfile, supabase, fetchUserProfile]
   );
 
   return (

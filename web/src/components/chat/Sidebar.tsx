@@ -41,6 +41,7 @@ const secondaryLinks = [
   { label: "Bet History", href: "/bankroll/history" },
   { label: "Analytics", href: "/analytics" },
   { label: "Reports", href: "/reports" },
+  { label: "Profile", href: "/profile" },
   { label: "Prompts", href: "/prompts" },
   { label: "Files", href: "/files" },
   { label: "Settings", href: "/settings" }

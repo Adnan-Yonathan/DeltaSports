@@ -167,7 +167,7 @@ export function ConversationPane() {
           </div>
         </div>
       ) : null}
-      <MessageList messages={messages} oddsFormat={oddsFormat} isStreaming={isStreaming} />
+      <MessageList messages={messages} isStreaming={isStreaming} />
       <div className="sticky bottom-0 space-y-3 bg-gradient-to-t from-black via-black/90 to-transparent px-6 pb-6 pt-4">
         {hasAssistantResponse ? (
           <div className="rounded-2xl border border-white/10 bg-black/70 px-4 py-3 text-xs text-slate-300">

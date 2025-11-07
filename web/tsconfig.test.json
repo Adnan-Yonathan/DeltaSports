@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2019",
+    "outDir": "./.test-dist/src",
+    "noEmit": false,
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "typeRoots": ["./src/types", "../node_modules/@types", "./node_modules/@types"],
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "src/lib/**/*",
+    "src/components/**/*",
+    "src/app/api/**/*",
+    "src/app/(app)/**/*",
+    "src/__tests__/**/*",
+    "src/types/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

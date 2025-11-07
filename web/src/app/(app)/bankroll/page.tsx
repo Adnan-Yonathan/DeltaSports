@@ -4,6 +4,7 @@ import { useSupabaseAuth } from '@/components/auth/SupabaseAuthProvider';
 import { CreateBankrollModal } from '@/components/bankroll/CreateBankrollModal';
 import { LogBetModal } from '@/components/bankroll/LogBetModal';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 type BankrollAccount = {
@@ -224,12 +225,12 @@ export default function BankrollPage() {
                     >
                       Log Bet
                     </button>
-                    <button
-                      type="button"
-                      className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/10"
+                    <Link
+                      href="/bankroll/history"
+                      className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center text-xs font-semibold text-white transition hover:border-white/20 hover:bg-white/10"
                     >
                       View History
-                    </button>
+                    </Link>
                   </div>
                 </div>
               );

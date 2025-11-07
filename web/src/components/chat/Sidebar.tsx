@@ -26,6 +26,7 @@ const chatHistory = [
 
 const secondaryLinks = [
   { label: "Bankroll", href: "/bankroll" },
+  { label: "Bet History", href: "/bankroll/history" },
   { label: "Prompts", href: "/prompts" },
   { label: "Files", href: "/files" },
   { label: "Settings", href: "/settings" }

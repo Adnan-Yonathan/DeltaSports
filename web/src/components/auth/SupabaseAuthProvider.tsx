@@ -1,116 +1,129 @@
 'use client';
 
-import { getSupabaseClient } from '@/lib/supabaseClient';
-import type { Session } from '@supabase/supabase-js';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import type { Session, User } from '@supabase/supabase-js';
 
-type SignInOptions = {
-  emailRedirectTo?: string;
+import { getBrowserSupabaseClient } from '@/lib/supabase/client';
+
+export type Profile = {
+  id: string;
+  email: string | null;
+  role: 'user' | 'admin';
+  created_at: string;
 };
 
 type SupabaseAuthContextValue = {
   session: Session | null;
+  profile: Profile | null;
   loading: boolean;
-  signInWithEmail: (
-    email: string,
-    options?: SignInOptions
-  ) => ReturnType<ReturnType<typeof getSupabaseClient>['auth']['signInWithOtp']>;
-  signOut: () => ReturnType<ReturnType<typeof getSupabaseClient>['auth']['signOut']>;
+  refreshProfile: () => Promise<void>;
 };
 
-const SupabaseAuthContext = createContext<SupabaseAuthContextValue | undefined>(
-  undefined
-);
+const SupabaseAuthContext = createContext<SupabaseAuthContextValue | undefined>(undefined);
 
-export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
-  const supabase = getSupabaseClient();
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+type SupabaseAuthProviderProps = {
+  initialSession: Session | null;
+  initialProfile: Profile | null;
+  children: ReactNode;
+};
+
+export function SupabaseAuthProvider({ initialSession, initialProfile, children }: SupabaseAuthProviderProps) {
+  const supabase = getBrowserSupabaseClient();
+  const [session, setSession] = useState<Session | null>(initialSession);
+  const [profile, setProfile] = useState<Profile | null>(initialProfile);
+  const [loading, setLoading] = useState<boolean>(!initialSession);
+
+  const loadProfile = useCallback(
+    async (user: User | null) => {
+      if (!user) {
+        setProfile(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id,email,role,created_at')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Unable to fetch profile', error);
+        return;
+      }
+
+      setProfile(data ?? null);
+    },
+    [supabase]
+  );
 
   useEffect(() => {
-    let isMounted = true;
-
-    const initialize = async () => {
-      setLoading(true);
-      try {
-        if (typeof window !== 'undefined') {
-          const url = new URL(window.location.href);
-          const hasAuthParams = url.searchParams.get('code') || url.searchParams.get('access_token');
-
-          if (hasAuthParams) {
-            const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-
-            if (error) {
-              console.error('Failed to exchange code for session', error);
-            }
-
-            url.search = '';
-            window.history.replaceState({}, document.title, url.toString());
-          }
-        }
-
-        const {
-          data: { session: initialSession }
-        } = await supabase.auth.getSession();
-
-        if (!isMounted) {
-          return;
-        }
-
-        setSession(initialSession);
-      } catch (error) {
-        console.error('Failed to initialize Supabase session', error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+    const exchangeToken = async () => {
+      if (typeof window === 'undefined') {
+        return;
       }
+
+      const url = new URL(window.location.href);
+      const hasCode = url.searchParams.get('code') || url.searchParams.get('access_token');
+
+      if (!hasCode) {
+        return;
+      }
+
+      const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+
+      if (error) {
+        console.error('Failed to exchange auth code for a session', error);
+      }
+
+      url.search = '';
+      window.history.replaceState({}, document.title, url.toString());
     };
 
-    void initialize();
+    void exchangeToken();
+  }, [supabase]);
 
+  useEffect(() => {
+    if (!session?.user) {
+      return;
+    }
+
+    if (!profile) {
+      void loadProfile(session.user);
+    }
+  }, [loadProfile, profile, session]);
+
+  useEffect(() => {
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      void loadProfile(nextSession?.user ?? null);
       setLoading(false);
     });
 
     return () => {
-      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [loadProfile, supabase]);
 
   const value = useMemo<SupabaseAuthContextValue>(
     () => ({
       session,
+      profile,
       loading,
-      signInWithEmail: (email: string, options?: SignInOptions) => {
-        const signInOptions = options?.emailRedirectTo
-          ? { emailRedirectTo: options.emailRedirectTo, shouldCreateUser: true }
-          : { shouldCreateUser: true };
-
-        return supabase.auth.signInWithOtp({
-          email,
-          options: signInOptions
-        });
-      },
-      signOut: () => supabase.auth.signOut()
+      refreshProfile: () => loadProfile(session?.user ?? null)
     }),
-    [loading, session, supabase]
+    [loadProfile, loading, profile, session]
   );
 
-  return (
-    <SupabaseAuthContext.Provider value={value}>{children}</SupabaseAuthContext.Provider>
-  );
+  return <SupabaseAuthContext.Provider value={value}>{children}</SupabaseAuthContext.Provider>;
 }
 
 export const useSupabaseAuth = () => {
   const context = useContext(SupabaseAuthContext);
 
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useSupabaseAuth must be used within a SupabaseAuthProvider');
   }
 

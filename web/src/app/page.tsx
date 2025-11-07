@@ -1,3 +1,5 @@
+import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
+
 const featureHighlights = [
   {
     title: "Conversational Home Hub",
@@ -29,9 +31,33 @@ const integrations = [
   { name: "Odds APIs", detail: "Ingest line movements for EV calculations." }
 ];
 
-export default function HomePage() {
+type HomePageProps = {
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+
+const accessMessage = (searchParams?: Record<string, string | string[] | undefined>) => {
+  if (!searchParams) {
+    return null;
+  }
+
+  if (searchParams.access === 'denied') {
+    return 'You need an admin account to view the Command Center.';
+  }
+
+  return null;
+};
+
+export default function HomePage({ searchParams }: HomePageProps) {
+  const message = accessMessage(searchParams);
+
   return (
     <main className="flex flex-1 flex-col gap-16 pb-16">
+      {message ? (
+        <div className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          {message}
+        </div>
+      ) : null}
+      <EmailVerificationBanner />
       <section id="features" className="grid gap-8 rounded-2xl bg-brand-subtle/60 p-8 shadow-lg shadow-black/30">
         <div className="space-y-2">
           <p className="text-sm uppercase tracking-widest text-brand-accent">Core Experience</p>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useSupabaseAuth } from '@/components/auth/SupabaseAuthProvider';
+import { BehavioralInsights } from '@/components/bankroll/BehavioralInsights';
 import { CreateBankrollModal } from '@/components/bankroll/CreateBankrollModal';
 import { LogBetModal } from '@/components/bankroll/LogBetModal';
 import { getSupabaseClient } from '@/lib/supabaseClient';
@@ -238,6 +239,9 @@ export default function BankrollPage() {
           </div>
         </div>
       )}
+
+      {/* Behavioral Insights */}
+      <BehavioralInsights />
 
       {/* Create Bankroll Modal */}
       <CreateBankrollModal

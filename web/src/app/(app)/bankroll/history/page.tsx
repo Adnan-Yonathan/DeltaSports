@@ -33,7 +33,21 @@ type FilterOptions = {
   status: string;
   market: string;
   bankrollId: string;
+  tag: string;
 };
+
+const BEHAVIORAL_TAG_OPTIONS = [
+  { value: 'value_bet', label: 'Value Bet' },
+  { value: 'research', label: 'Research-Based' },
+  { value: 'sharp', label: 'Sharp Money' },
+  { value: 'system', label: 'System Play' },
+  { value: 'hedge', label: 'Hedge' },
+  { value: 'confident', label: 'High Confidence' },
+  { value: 'public_fade', label: 'Public Fade' },
+  { value: 'impulse', label: 'Impulse' },
+  { value: 'tilt', label: 'Tilt' },
+  { value: 'chasing_losses', label: 'Chasing Losses' },
+] as const;
 
 export default function BetHistoryPage() {
   const { userProfile } = useSupabaseAuth();
@@ -45,6 +59,7 @@ export default function BetHistoryPage() {
     status: 'all',
     market: 'all',
     bankrollId: 'all',
+    tag: 'all',
   });
   const [selectedBetId, setSelectedBetId] = useState<string | null>(null);
 
@@ -77,6 +92,27 @@ export default function BetHistoryPage() {
 
     setLoading(true);
     try {
+      // If filtering by tag, first fetch bet IDs with that tag
+      let betIdsWithTag: string[] | null = null;
+      if (filters.tag !== 'all') {
+        const { data: tagData, error: tagError } = await supabase
+          .from('bet_tags')
+          .select('bet_id')
+          .eq('tag', filters.tag);
+
+        if (tagError) {
+          console.error('Failed to fetch bet tags', tagError);
+        } else {
+          betIdsWithTag = tagData ? tagData.map((t) => t.bet_id) : [];
+          // If no bets have this tag, set empty array to return no results
+          if (betIdsWithTag.length === 0) {
+            setBets([]);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
       let query = supabase
         .from('bets')
         .select('*')
@@ -92,6 +128,9 @@ export default function BetHistoryPage() {
       }
       if (filters.bankrollId !== 'all') {
         query = query.eq('bankroll_id', filters.bankrollId);
+      }
+      if (betIdsWithTag !== null) {
+        query = query.in('id', betIdsWithTag);
       }
 
       const { data, error } = await query;
@@ -298,6 +337,21 @@ export default function BetHistoryPage() {
             {bankrolls.map((br) => (
               <option key={br.id} value={br.id}>
                 {br.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex-1 min-w-[150px]">
+          <label className="block text-xs font-medium text-slate-400">Behavioral Tag</label>
+          <select
+            value={filters.tag}
+            onChange={(e) => setFilters({ ...filters, tag: e.target.value })}
+            className="mt-1 w-full rounded-lg border border-white/10 bg-black/70 px-3 py-1.5 text-sm text-white focus:border-brand-accent focus:outline-none"
+          >
+            <option value="all">All Tags</option>
+            {BEHAVIORAL_TAG_OPTIONS.map((tag) => (
+              <option key={tag.value} value={tag.value}>
+                {tag.label}
               </option>
             ))}
           </select>

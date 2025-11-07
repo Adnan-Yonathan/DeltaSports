@@ -27,6 +27,19 @@ const MARKET_OPTIONS = [
   { value: 'other', label: 'Other' },
 ] as const;
 
+const BEHAVIORAL_TAGS = [
+  { value: 'value_bet', label: 'Value Bet', description: 'Identified value opportunity', color: 'emerald' },
+  { value: 'research', label: 'Research-Based', description: 'Thorough analysis', color: 'blue' },
+  { value: 'sharp', label: 'Sharp Money', description: 'Following sharp action', color: 'purple' },
+  { value: 'system', label: 'System Play', description: 'Part of betting system', color: 'cyan' },
+  { value: 'hedge', label: 'Hedge', description: 'Hedging position', color: 'slate' },
+  { value: 'confident', label: 'High Confidence', description: 'Strong conviction', color: 'green' },
+  { value: 'public_fade', label: 'Public Fade', description: 'Fading public sentiment', color: 'indigo' },
+  { value: 'impulse', label: 'Impulse', description: 'Quick decision', color: 'amber' },
+  { value: 'tilt', label: 'Tilt', description: 'Emotional betting', color: 'red' },
+  { value: 'chasing_losses', label: 'Chasing Losses', description: 'Trying to recover', color: 'orange' },
+] as const;
+
 export function LogBetModal({ isOpen, onClose, onSuccess, selectedBankrollId }: LogBetModalProps) {
   const { userProfile } = useSupabaseAuth();
   const supabase = getSupabaseClient();
@@ -37,6 +50,7 @@ export function LogBetModal({ isOpen, onClose, onSuccess, selectedBankrollId }: 
   const [wagerAmount, setWagerAmount] = useState('');
   const [americanOdds, setAmericanOdds] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +102,15 @@ export function LogBetModal({ isOpen, onClose, onSuccess, selectedBankrollId }: 
     ? (parseFloat(wagerAmount) * parseFloat(decimalOdds)).toFixed(2)
     : null;
 
+  const toggleTag = useCallback((tagValue: string) => {
+    setSelectedTags((current) => {
+      if (current.includes(tagValue)) {
+        return current.filter((t) => t !== tagValue);
+      }
+      return [...current, tagValue];
+    });
+  }, []);
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -123,31 +146,53 @@ export function LogBetModal({ isOpen, onClose, onSuccess, selectedBankrollId }: 
       setError(null);
 
       try {
-        const { error: insertError } = await supabase.from('bets').insert({
-          user_id: userProfile.id,
-          bankroll_id: bankrollId,
-          event_name: eventName.trim(),
-          market,
-          wager_amount: wager,
-          american_odds: odds,
-          decimal_odds: decimalOdds ? parseFloat(decimalOdds) : null,
-          notes: notes.trim() || null,
-          status: 'pending',
-        });
+        // Insert bet
+        const { data: betData, error: insertError } = await supabase
+          .from('bets')
+          .insert({
+            user_id: userProfile.id,
+            bankroll_id: bankrollId,
+            event_name: eventName.trim(),
+            market,
+            wager_amount: wager,
+            american_odds: odds,
+            decimal_odds: decimalOdds ? parseFloat(decimalOdds) : null,
+            notes: notes.trim() || null,
+            status: 'pending',
+          })
+          .select()
+          .single();
 
         if (insertError) {
           console.error('Failed to log bet', insertError);
           setError('Failed to log bet. Please try again.');
-        } else {
-          // Reset form
-          setEventName('');
-          setMarket('moneyline');
-          setWagerAmount('');
-          setAmericanOdds('');
-          setNotes('');
-          onSuccess();
-          onClose();
+          return;
         }
+
+        // Insert behavioral tags if any selected
+        if (betData && selectedTags.length > 0) {
+          const tagInserts = selectedTags.map((tag) => ({
+            bet_id: betData.id,
+            tag,
+          }));
+
+          const { error: tagsError } = await supabase.from('bet_tags').insert(tagInserts);
+
+          if (tagsError) {
+            console.error('Failed to insert bet tags', tagsError);
+            // Don't fail the whole operation if tags fail
+          }
+        }
+
+        // Reset form
+        setEventName('');
+        setMarket('moneyline');
+        setWagerAmount('');
+        setAmericanOdds('');
+        setNotes('');
+        setSelectedTags([]);
+        onSuccess();
+        onClose();
       } catch (error) {
         console.error('Error logging bet', error);
         setError('An unexpected error occurred.');
@@ -155,7 +200,7 @@ export function LogBetModal({ isOpen, onClose, onSuccess, selectedBankrollId }: 
         setIsSubmitting(false);
       }
     },
-    [userProfile, supabase, bankrollId, eventName, market, wagerAmount, americanOdds, decimalOdds, notes, onSuccess, onClose]
+    [userProfile, supabase, bankrollId, eventName, market, wagerAmount, americanOdds, decimalOdds, notes, selectedTags, onSuccess, onClose]
   );
 
   const handleClose = useCallback(() => {
@@ -165,6 +210,7 @@ export function LogBetModal({ isOpen, onClose, onSuccess, selectedBankrollId }: 
       setWagerAmount('');
       setAmericanOdds('');
       setNotes('');
+      setSelectedTags([]);
       setError(null);
       onClose();
     }
@@ -305,6 +351,42 @@ export function LogBetModal({ isOpen, onClose, onSuccess, selectedBankrollId }: 
               className="mt-2 w-full rounded-lg border border-white/10 bg-black/70 px-4 py-2 text-sm text-white placeholder-slate-500 focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/50"
               disabled={isSubmitting}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-white">
+              Behavioral Tags (Optional)
+            </label>
+            <p className="mt-1 text-xs text-slate-400">
+              Tag this bet to track betting patterns and psychology
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {BEHAVIORAL_TAGS.map((tag) => {
+                const isSelected = selectedTags.includes(tag.value);
+                return (
+                  <button
+                    key={tag.value}
+                    type="button"
+                    onClick={() => toggleTag(tag.value)}
+                    disabled={isSubmitting}
+                    className={`rounded-lg border px-3 py-2 text-left text-xs transition disabled:opacity-50 ${
+                      isSelected
+                        ? 'border-brand-accent/60 bg-brand-accent/20 text-brand-accent'
+                        : 'border-white/10 bg-black/40 text-slate-300 hover:border-white/20 hover:bg-white/5'
+                    }`}
+                    title={tag.description}
+                  >
+                    <span className="block font-medium">{tag.label}</span>
+                    <span className="mt-0.5 block text-[10px] opacity-70">{tag.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedTags.length > 0 && (
+              <div className="mt-2 text-xs text-slate-400">
+                {selectedTags.length} tag{selectedTags.length !== 1 ? 's' : ''} selected
+              </div>
+            )}
           </div>
 
           {error && (

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "PATH=../scripts/bin:$PATH; next build && next export && node ../scripts/sync-next-output.mjs",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -23,6 +24,7 @@
     "eslint-config-next": "14.2.3",
     "postcss": "8.4.35",
     "tailwindcss": "3.4.3",
-    "typescript": "5.4.5"
+    "typescript": "5.4.5",
+    "vitest": "1.6.0"
   }
 }

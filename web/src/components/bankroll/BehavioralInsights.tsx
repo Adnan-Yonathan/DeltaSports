@@ -265,7 +265,7 @@ export function BehavioralInsights() {
             <div className="flex-1">
               <p className="text-sm font-semibold text-red-200">Negative Patterns Detected</p>
               <p className="mt-1 text-xs text-red-300">
-                You've logged {negativePatterns.reduce((sum, p) => sum + p.count, 0)} bets with negative behavioral tags.
+                You&apos;ve logged {negativePatterns.reduce((sum, p) => sum + p.count, 0)} bets with negative behavioral tags.
                 Consider reviewing these patterns:
               </p>
               <ul className="mt-2 space-y-1">
@@ -356,7 +356,7 @@ export function BehavioralInsights() {
             <div className="flex-1">
               <p className="text-sm font-semibold text-emerald-200">Positive Patterns</p>
               <p className="mt-1 text-xs text-emerald-300">
-                You're using disciplined betting strategies. Keep it up!
+                You&apos;re using disciplined betting strategies. Keep it up!
               </p>
               <ul className="mt-2 space-y-1">
                 {positivePatterns.slice(0, 3).map((pattern) => (

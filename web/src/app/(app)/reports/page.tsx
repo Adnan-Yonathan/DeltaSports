@@ -307,7 +307,7 @@ export default function ReportsPage() {
       <div className="rounded-xl border border-blue-500/40 bg-blue-500/10 p-4">
         <p className="text-sm font-semibold text-blue-200">Key Insights</p>
         <ul className="mt-2 space-y-1 text-xs text-blue-300">
-          {report.roi > 5 && <li>• Excellent ROI - you're beating the market</li>}
+          {report.roi > 5 && <li>• Excellent ROI - you&apos;re beating the market</li>}
           {report.roi < -5 && <li>• Negative ROI - consider strategy review</li>}
           {report.winRate > 55 && <li>• Strong win rate - above typical sharp bettor baseline</li>}
           {report.winRate < 45 && <li>• Low win rate - focus on value betting</li>}

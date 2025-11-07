@@ -429,14 +429,14 @@ export default function OddsScannerPage() {
                               <tr key={bookmaker.key} className="transition hover:bg-white/5">
                                 <td className="px-3 py-2 font-medium text-white">{bookmaker.title}</td>
                                 <td className="px-3 py-2 text-right text-slate-300">
-                                  {awayOutcome?.point !== null && awayOutcome?.price !== null
+                                  {awayOutcome && awayOutcome.point !== null && awayOutcome.price !== null
                                     ? `${awayOutcome.point > 0 ? '+' : ''}${awayOutcome.point} (${
                                         awayOutcome.price > 0 ? '+' : ''
                                       }${awayOutcome.price})`
                                     : 'N/A'}
                                 </td>
                                 <td className="px-3 py-2 text-right text-slate-300">
-                                  {homeOutcome?.point !== null && homeOutcome?.price !== null
+                                  {homeOutcome && homeOutcome.point !== null && homeOutcome.price !== null
                                     ? `${homeOutcome.point > 0 ? '+' : ''}${homeOutcome.point} (${
                                         homeOutcome.price > 0 ? '+' : ''
                                       }${homeOutcome.price})`

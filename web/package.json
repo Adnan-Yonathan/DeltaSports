@@ -7,9 +7,7 @@
     "build": "PATH=../scripts/bin:$PATH; next build && node ../scripts/sync-next-output.mjs",
     "start": "next start",
     "lint": "next lint",
-    "test": "npm run test:build && npm run test:run",
-    "test:build": "rm -rf .test-dist && tsc -p tsconfig.test.json",
-    "test:run": "NODE_OPTIONS=\"--require ./scripts/register-test-alias.cjs\" node --test $(find .test-dist/src/__tests__ -name '*.test.js')"
+    "test": "vitest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -32,6 +30,7 @@
     "eslint-config-next": "14.2.3",
     "postcss": "8.4.35",
     "tailwindcss": "3.4.3",
-    "typescript": "5.4.5"
+    "typescript": "5.4.5",
+    "vitest": "1.6.0"
   }
 }

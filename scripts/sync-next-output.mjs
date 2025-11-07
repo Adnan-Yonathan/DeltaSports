@@ -10,9 +10,9 @@ async function main() {
 
   try {
     await stat(src);
-  } catch (error) {
-    console.error(`Expected Next.js export output at "${src}" but it was not found.`);
-    throw error;
+  } catch {
+    console.info(`No static export directory at ${src}; keeping existing Next.js build output.`);
+    return;
   }
 
   await rm(dest, { recursive: true, force: true });

@@ -4,15 +4,14 @@ import { useEffect, useRef } from "react";
 
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
-import type { ConversationMessage, OddsFormat } from "./types";
+import type { ConversationMessage } from "./types";
 
 type MessageListProps = {
   messages: readonly ConversationMessage[];
-  oddsFormat: OddsFormat;
   isStreaming: boolean;
 };
 
-export function MessageList({ messages, oddsFormat, isStreaming }: MessageListProps) {
+export function MessageList({ messages, isStreaming }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -27,7 +26,7 @@ export function MessageList({ messages, oddsFormat, isStreaming }: MessageListPr
   return (
     <div ref={containerRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-6 pb-32">
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} oddsFormat={oddsFormat} />
+        <MessageBubble key={message.id} message={message} />
       ))}
       {isStreaming ? <TypingIndicator /> : null}
     </div>

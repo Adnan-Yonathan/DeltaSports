@@ -15,6 +15,7 @@
     "deploy-functions": "bash ../scripts/deploy-functions.sh",
     "test-functions": "node ../scripts/test-functions.mjs",
     "test-integration": "node ../scripts/test-integration.mjs",
+    "verify-deployment": "node ../scripts/verify-deployment.mjs",
     "test-all": "npm run check-config && npm run test-functions && npm run test-integration"
   },
   "dependencies": {

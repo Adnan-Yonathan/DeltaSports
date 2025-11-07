@@ -73,6 +73,100 @@ bash scripts/setup-supabase.sh
 
 ---
 
+### 🚢 deploy-functions.sh
+
+**Purpose**: Automated deployment of all Supabase edge functions.
+
+**Usage**:
+```bash
+bash scripts/deploy-functions.sh [function-name]
+```
+
+**What it does**:
+1. Checks Supabase CLI prerequisites
+2. Verifies edge function secrets are set
+3. Deploys all or specific edge function(s)
+4. Shows deployment summary
+
+**Functions Deployed**:
+- `odds-assistant` (critical)
+- `on-auth-profile`
+- `bankroll-metrics-sync`
+- `edge-alerts-dispatch`
+- `creator-feed-publish`
+
+**Exit Codes**:
+- `0` - All functions deployed successfully
+- `1` - One or more deployments failed
+
+---
+
+### 🧪 test-functions.mjs
+
+**Purpose**: Tests all deployed edge functions with real requests.
+
+**Usage**:
+```bash
+node scripts/test-functions.mjs
+```
+
+**What it does**:
+- Tests `odds-assistant` with real query (critical function)
+- Checks deployment status of all other functions
+- Validates response formats
+- Reports pass/fail for each function
+
+**Exit Codes**:
+- `0` - Critical functions working
+- `1` - Critical function failed
+
+---
+
+### 🔗 test-integration.mjs
+
+**Purpose**: End-to-end integration testing of the entire stack.
+
+**Usage**:
+```bash
+node scripts/test-integration.mjs
+```
+
+**What it does**:
+1. Tests database schema (all 11 tables)
+2. Tests RLS policies
+3. Tests edge functions
+4. Tests external API integration
+
+**Exit Codes**:
+- `0` - All integration tests passed
+- `1` - One or more tests failed
+
+---
+
+### ✅ verify-deployment.mjs
+
+**Purpose**: Comprehensive verification of entire deployment.
+
+**Usage**:
+```bash
+node scripts/verify-deployment.mjs
+```
+
+**What it does**:
+1. Verifies environment configuration
+2. Verifies database schema
+3. Tests all edge functions
+4. Tests external APIs
+5. Provides detailed pass/fail report
+
+**Use this before going to production!**
+
+**Exit Codes**:
+- `0` - Deployment ready for production
+- `1` - Critical issues found
+
+---
+
 ## 🚀 Quick Start
 
 ### First Time Setup
@@ -142,10 +236,22 @@ supabase functions deploy odds-assistant
 For convenience, these scripts are also available as npm commands:
 
 ```bash
-# From project root or web/ directory
-npm run verify-env      # Run verify-env.mjs
-npm run test-api-keys   # Run test-api-keys.mjs
-npm run setup-supabase  # Run setup-supabase.sh
+# From web/ directory
+
+# Environment & Configuration
+npm run verify-env          # Validate environment variables
+npm run test-api-keys       # Test API connectivity
+npm run setup-supabase      # Automated Supabase setup
+npm run check-config        # Run all config checks
+
+# Deployment
+npm run deploy-functions    # Deploy all edge functions
+npm run verify-deployment   # Complete deployment verification
+
+# Testing
+npm run test-functions      # Test all edge functions
+npm run test-integration    # End-to-end integration tests
+npm run test-all           # Run all tests
 ```
 
 ---

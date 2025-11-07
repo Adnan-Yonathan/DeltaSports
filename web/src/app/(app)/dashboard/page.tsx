@@ -1,6 +1,7 @@
 import { BankrollPreview } from '@/components/bankroll-preview';
 import { ConversationPane } from "@/components/chat/ConversationPane";
 import { EdgeOpportunities } from '@/components/odds/EdgeOpportunities';
+import { SmartNudges } from '@/components/insights/SmartNudges';
 
 const operations = [
   {
@@ -42,6 +43,7 @@ export default function DashboardPage() {
         <ConversationPane />
       </div>
       <aside className="flex w-full max-w-sm flex-col gap-6">
+        <SmartNudges />
         <EdgeOpportunities />
         <BankrollPreview />
       </aside>

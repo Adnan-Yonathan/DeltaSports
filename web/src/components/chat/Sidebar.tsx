@@ -28,6 +28,7 @@ const secondaryLinks = [
   { label: "Odds Scanner", href: "/odds-scanner" },
   { label: "Bankroll", href: "/bankroll" },
   { label: "Bet History", href: "/bankroll/history" },
+  { label: "Reports", href: "/reports" },
   { label: "Prompts", href: "/prompts" },
   { label: "Files", href: "/files" },
   { label: "Settings", href: "/settings" }

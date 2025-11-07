@@ -4,16 +4,22 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "PATH=../scripts/bin:$PATH; next build && next export && node ../scripts/sync-next-output.mjs",
+    "build": "PATH=../scripts/bin:$PATH; next build && node ../scripts/sync-next-output.mjs",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "axios": "^1.6.8",
+    "envalid": "^8.0.0",
     "next": "14.2.3",
+    "openai": "^4.47.1",
+    "pino": "^8.20.0",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "swr": "^2.2.4",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "20.11.30",

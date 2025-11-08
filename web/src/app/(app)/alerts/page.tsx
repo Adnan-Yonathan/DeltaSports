@@ -214,7 +214,7 @@ export default function AlertsPage() {
                     • Alerts are triggered when odds meet your configured thresholds
                   </li>
                   <li>
-                    • Acknowledge alerts you're tracking, dismiss ones you're not interested in
+                    • Acknowledge alerts you&apos;re tracking, dismiss ones you&apos;re not interested in
                   </li>
                   <li>
                     • Configure your preferences in Settings to customize alert criteria

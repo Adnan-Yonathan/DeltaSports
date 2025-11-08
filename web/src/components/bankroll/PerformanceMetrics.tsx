@@ -221,7 +221,7 @@ export function PerformanceMetrics({
             <div className="text-center py-8">
               <p className="text-sm text-slate-400">No tags used yet</p>
               <p className="text-xs text-slate-500 mt-1">
-                Tag your bets to track patterns like "tilt", "sharp", "live_bet"
+                Tag your bets to track patterns like &apos;tilt&apos;, &apos;sharp&apos;, &apos;live_bet&apos;
               </p>
             </div>
           ) : (

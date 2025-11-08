@@ -144,7 +144,7 @@ export function QuickBetEntry({ bankrollId, onSubmit, onCancel }: QuickBetEntryP
           {/* Natural Language Input */}
           <div className="space-y-2">
             <label className="text-sm text-slate-400">
-              Describe your bet (e.g., "$100 on Lakers ML -150")
+              Describe your bet (e.g., &quot;$100 on Lakers ML -150&quot;)
             </label>
             <input
               type="text"
@@ -282,7 +282,7 @@ export function QuickBetEntry({ bankrollId, onSubmit, onCancel }: QuickBetEntryP
       {/* Help Text */}
       {!isManualMode && (
         <p className="text-xs text-slate-500 text-center">
-          Try: "$100 on Lakers ML -150" or "50 Warriors -3.5 -110" or "$25 over 225.5 -105"
+          Try: &quot;$100 on Lakers ML -150&quot; or &quot;50 Warriors -3.5 -110&quot; or &quot;$25 over 225.5 -105&quot;
         </p>
       )}
     </div>

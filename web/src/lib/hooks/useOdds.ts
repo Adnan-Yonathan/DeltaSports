@@ -30,13 +30,20 @@ interface UseOddsOptions {
   refreshInterval?: number; // milliseconds
 }
 
+interface OddsMetadata {
+  sport: string;
+  eventCount: number;
+  evOpportunityCount: number;
+  fetchedAt: string;
+}
+
 interface UseOddsReturn {
   events: ProcessedOdds[];
   evOpportunities: EVAnalysis[];
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  metadata: OddsResponse["data"]["metadata"] | null;
+  metadata: OddsMetadata | null;
 }
 
 export function useOdds(options: UseOddsOptions = {}): UseOddsReturn {
@@ -52,7 +59,7 @@ export function useOdds(options: UseOddsOptions = {}): UseOddsReturn {
 
   const [events, setEvents] = useState<ProcessedOdds[]>([]);
   const [evOpportunities, setEvOpportunities] = useState<EVAnalysis[]>([]);
-  const [metadata, setMetadata] = useState<OddsResponse["data"]["metadata"] | null>(null);
+  const [metadata, setMetadata] = useState<OddsMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

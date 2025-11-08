@@ -27,6 +27,7 @@ const chatHistory = [
 const secondaryLinks = [
   { label: "Odds Scanner", href: "/odds", emoji: "📊" },
   { label: "Bankroll", href: "/bankroll", emoji: "💰" },
+  { label: "Alerts", href: "/alerts", emoji: "🔔" },
   { label: "Prompts", href: "/prompts" },
   { label: "Files", href: "/files" },
   { label: "Settings", href: "/settings" }

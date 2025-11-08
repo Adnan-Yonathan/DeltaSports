@@ -18,7 +18,7 @@ create domain currency_code as text
 create type bet_status as enum ('pending', 'won', 'lost', 'push', 'void');
 
 -- Identify how an alert was generated
-create type alert_origin as enum ('model', 'creator', 'manual');
+create type alert_origin as enum ('model', 'manual');
 ```
 
 ## 3. Core Profiles
@@ -81,7 +81,7 @@ create table if not exists public.bet_tags (
 
 ## 5. Edge Intelligence
 ```sql
--- Alerts emitted from the value models or creators
+-- Alerts emitted from the value models
 create table if not exists public.edge_alerts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.user_profiles (id) on delete cascade,
@@ -109,42 +109,7 @@ create table if not exists public.alert_events (
 );
 ```
 
-## 6. Creator Network
-```sql
--- Registered creators that bettors can follow
-create table if not exists public.creator_profiles (
-  id uuid primary key default gen_random_uuid(),
-  handle text not null unique,
-  display_name text not null,
-  avatar_url text,
-  bio text,
-  specialties text[] default array[]::text[],
-  created_at timestamptz not null default now()
-);
-
--- Posts that populate the creator feed
-create table if not exists public.creator_posts (
-  id uuid primary key default gen_random_uuid(),
-  creator_id uuid not null references public.creator_profiles (id) on delete cascade,
-  title text not null,
-  content text not null,
-  market text,
-  published_at timestamptz not null default now(),
-  metadata jsonb default '{}'::jsonb
-);
-
--- Subscription relationship between bettors and creators
-create table if not exists public.creator_subscriptions (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.user_profiles (id) on delete cascade,
-  creator_id uuid not null references public.creator_profiles (id) on delete cascade,
-  status text not null default 'active',
-  created_at timestamptz not null default now(),
-  unique (user_id, creator_id)
-);
-```
-
-## 7. Utility Trigger
+## 6. Utility Triggers
 ```sql
 -- Keep updated_at columns current without manual writes
 create or replace function public.set_updated_at()

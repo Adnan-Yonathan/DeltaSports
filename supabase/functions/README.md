@@ -1,7 +1,6 @@
 # Supabase Edge Functions
 
-Edge functions provide the realtime glue for bankroll analytics, edge alerts, creator engagement, and conversational summaries. E
-each folder houses one function plus any feature-specific README with payload samples.
+Edge functions provide the realtime glue for bankroll analytics, edge alerts, and conversational summaries. Each folder houses one function plus any feature-specific README with payload samples.
 
 ## Directory map
 
@@ -10,7 +9,6 @@ supabase/functions/
   shared/                   # Cross-function utilities (env, client, response helpers)
   bankroll-metrics-sync/     # Recalculate bankroll metrics after bet inserts/updates
   chat-digest/               # Build conversational digests for the home hub
-  creator-feed-publish/      # Publish creator posts & notify subscribers
   edge-alerts-ack/           # Record alert acknowledgements from clients
   edge-alerts-dispatch/      # Persist threshold-crossing alerts & fan out notifications
   ev-scanner-refresh/        # Poll odds feeds and update edge_alerts with EV snapshots

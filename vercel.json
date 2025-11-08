@@ -2,6 +2,5 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "framework": null,
-  "outputDirectory": "web/.next"
+  "outputDirectory": "web/out"
 }

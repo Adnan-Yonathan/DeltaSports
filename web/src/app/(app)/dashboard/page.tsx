@@ -1,4 +1,5 @@
 import { ConversationPane } from "@/components/chat/ConversationPane";
+import { EdgePreview } from "@/components/edge-preview";
 
 const operations = [
   {
@@ -15,21 +16,6 @@ const operations = [
     title: "Data providers",
     value: "2 / 2",
     helper: "All odds endpoints and backups responsive"
-  }
-] as const;
-
-const analyticsSignals = [
-  {
-    title: "Prompt capture",
-    description: "`chat_prompt_submitted` fires with token length and quick prompt metadata."
-  },
-  {
-    title: "Format toggles",
-    description: "`odds_format_toggled` records user preference shifts for odds rendering."
-  },
-  {
-    title: "Streaming completion",
-    description: "`llm.answer.stream_completed` captures latency and fallback usage."
   }
 ] as const;
 
@@ -57,22 +43,7 @@ export default function DashboardPage() {
             ))}
           </ul>
         </section>
-        <section className="space-y-3">
-          <header className="space-y-1">
-            <h3 className="text-base font-semibold text-white">Analytics checkpoints</h3>
-            <p className="text-sm text-slate-300">
-              PostHog instrumentation pairs UI events with LLM outcomes for faster iteration.
-            </p>
-          </header>
-          <ul className="space-y-2 text-xs text-slate-300">
-            {analyticsSignals.map((signal) => (
-              <li key={signal.title} className="rounded-xl border border-white/10 bg-black/40 p-4">
-                <p className="text-sm font-medium text-white">{signal.title}</p>
-                <p className="mt-1 text-[12px] leading-relaxed text-slate-400">{signal.description}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <EdgePreview />
       </aside>
     </div>
   );

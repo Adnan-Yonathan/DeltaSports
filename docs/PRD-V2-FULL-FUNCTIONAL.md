@@ -719,167 +719,283 @@ DeltaSports transforms sports betting from guesswork into intelligent decision-m
 
 ---
 
-## 8. Data Models
+## 8. Supabase Database Schema
 
-### 8.1 Core Tables
+This section contains the complete SQL schema for DeltaSports. Execute these statements in the Supabase SQL Editor in order.
+
+### 8.1 Enable Extensions
+
+```sql
+-- Ensures UUID generation helpers are available
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+```
+
+### 8.2 Domain & Enum Types
+
+```sql
+-- Normalized currency code type (ISO-4217)
+CREATE DOMAIN currency_code AS TEXT
+  CHECK (value ~ '^[A-Z]{3}$');
+
+-- Track bet outcomes
+CREATE TYPE bet_status AS ENUM ('pending', 'won', 'lost', 'push', 'void');
+
+-- Identify how an alert was generated
+CREATE TYPE alert_origin AS ENUM ('model', 'manual');
+```
+
+**Note:** Removed `'creator'` from `alert_origin` enum as creator feed is not included.
+
+### 8.3 Core Tables
 
 #### user_profiles
+
+Links authenticated users to betting preferences and settings.
+
 ```sql
-CREATE TABLE user_profiles (
+CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_user_id UUID REFERENCES auth.users(id) UNIQUE,
-  email TEXT,
-  display_name TEXT,
-  favorite_sports TEXT[], -- ['NBA', 'NFL', 'MLB']
-  preferred_odds_format TEXT DEFAULT 'american', -- 'american', 'decimal', 'fractional'
-  timezone TEXT DEFAULT 'America/New_York',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  auth_user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  preferred_timezone TEXT DEFAULT 'UTC',
+  favorite_sports TEXT[] DEFAULT ARRAY[]::TEXT[],
+  bankroll_goal NUMERIC(12,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(auth_user_id)
 );
 ```
+
+**Key Fields:**
+- `auth_user_id` - Links to Supabase Auth users table
+- `favorite_sports` - Array of sport preferences (e.g., `['NBA', 'NFL']`)
+- `bankroll_goal` - Optional target bankroll amount
+- `preferred_timezone` - For displaying times in user's local timezone
+
+---
 
 #### bankroll_accounts
+
+Track multiple bankroll accounts a bettor manages.
+
 ```sql
-CREATE TABLE bankroll_accounts (
+CREATE TABLE IF NOT EXISTS public.bankroll_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
-  label TEXT NOT NULL, -- 'Main Account', 'FanDuel Bankroll'
-  currency TEXT DEFAULT 'USD',
-  starting_balance NUMERIC(10, 2) NOT NULL,
-  current_balance NUMERIC(10, 2) NOT NULL,
-  unit_size NUMERIC(10, 2), -- Recommended unit (e.g., 2% of bankroll)
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  user_id UUID NOT NULL REFERENCES public.user_profiles (id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  currency currency_code NOT NULL DEFAULT 'USD',
+  starting_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  current_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
+
+**Key Fields:**
+- `label` - User-friendly name (e.g., "Main Account", "FanDuel Bankroll")
+- `currency` - ISO-4217 currency code (constrained by domain type)
+- `starting_balance` - Initial balance when account created
+- `current_balance` - Updated automatically by `bankroll-metrics-sync` edge function
+
+---
 
 #### bets
+
+Individual bets tied to bankrolls with full outcome tracking.
+
 ```sql
-CREATE TABLE bets (
+CREATE TABLE IF NOT EXISTS public.bets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
-  bankroll_id UUID REFERENCES bankroll_accounts(id) ON DELETE SET NULL,
-
-  -- Bet Details
-  event_name TEXT NOT NULL, -- 'Lakers vs Celtics'
-  sport TEXT NOT NULL, -- 'NBA', 'NFL'
-  market TEXT NOT NULL, -- 'moneyline', 'spread', 'total'
-  bet_type TEXT, -- 'over', 'under', 'home', 'away'
-  selection TEXT, -- 'Lakers ML', 'Over 220.5'
-
-  -- Odds & Stake
-  odds_american TEXT, -- '+145'
-  odds_decimal NUMERIC(6, 2), -- 2.45
-  wager_amount NUMERIC(10, 2) NOT NULL,
-  expected_value NUMERIC(5, 2), -- 6.2 (%)
-
-  -- Sportsbook
-  sportsbook TEXT, -- 'FanDuel', 'DraftKings'
-
-  -- Status
-  status TEXT DEFAULT 'pending', -- 'pending', 'won', 'lost', 'push', 'void'
-  settled_at TIMESTAMP WITH TIME ZONE,
-  settled_payout NUMERIC(10, 2), -- Actual payout if won
-
-  -- Metadata
-  tags TEXT[], -- ['tilt', 'chase', 'sharp']
+  user_id UUID NOT NULL REFERENCES public.user_profiles (id) ON DELETE CASCADE,
+  bankroll_id UUID REFERENCES public.bankroll_accounts (id) ON DELETE SET NULL,
+  event_name TEXT NOT NULL,
+  market TEXT NOT NULL,
+  wager_amount NUMERIC(12,2) NOT NULL,
+  american_odds INTEGER,
+  decimal_odds NUMERIC(8,4),
+  expected_value NUMERIC(8,4),
+  status bet_status NOT NULL DEFAULT 'pending',
+  settled_payout NUMERIC(12,2),
   notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  placed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  settled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX idx_bets_user_id ON bets(user_id);
-CREATE INDEX idx_bets_status ON bets(status);
-CREATE INDEX idx_bets_sport ON bets(sport);
 ```
+
+**Key Fields:**
+- `event_name` - Human-readable event (e.g., "Lakers vs Celtics")
+- `market` - Bet type (e.g., "moneyline", "spread", "total")
+- `american_odds` - American format odds (e.g., -110, +145)
+- `decimal_odds` - Decimal format odds (e.g., 1.91, 2.45)
+- `expected_value` - +EV percentage if calculated
+- `status` - Enum type for bet outcome
+- `placed_at` - When bet was placed (distinct from `created_at`)
+
+---
+
+#### bet_tags
+
+Optional tags that drive behavioral insights (tilt detection, pattern analysis).
+
+```sql
+CREATE TABLE IF NOT EXISTS public.bet_tags (
+  bet_id UUID REFERENCES public.bets (id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  tagged_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (bet_id, tag)
+);
+```
+
+**Common Tags:**
+- `tilt` - Bet placed during emotional state
+- `chase` - Bet placed to recover losses
+- `sharp` - Well-researched, high-confidence bet
+- `line_shopper` - Best odds secured across books
+
+---
 
 #### edge_alerts
+
+Alerts emitted from value models when EV thresholds are crossed.
+
 ```sql
-CREATE TABLE edge_alerts (
+CREATE TABLE IF NOT EXISTS public.edge_alerts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
-
-  -- Alert Condition
-  sport TEXT NOT NULL,
-  market TEXT, -- 'moneyline', 'spread', 'player_props'
-  trigger_condition TEXT NOT NULL, -- 'ev_exceeds_5', 'line_moves_0.5'
-  threshold_value NUMERIC(6, 2), -- 5.0 (for 5% EV)
-
-  -- Alert Details
-  event_name TEXT,
-  message TEXT NOT NULL, -- 'Warriors ML now +6.8% EV on FanDuel'
-  ev_value NUMERIC(5, 2), -- 6.8
-  odds_value TEXT, -- '+155'
-  sportsbook TEXT,
-
-  -- Status
-  status TEXT DEFAULT 'active', -- 'active', 'acknowledged', 'dismissed'
-  acknowledged_at TIMESTAMP WITH TIME ZONE,
-
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
-CREATE INDEX idx_alerts_user_status ON edge_alerts(user_id, status);
-CREATE INDEX idx_alerts_created_at ON edge_alerts(created_at DESC);
-```
-
-#### odds_history (time-series)
-```sql
-CREATE TABLE odds_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-  -- Event
-  sport TEXT NOT NULL,
-  event_name TEXT NOT NULL,
-  event_start_time TIMESTAMP WITH TIME ZONE,
-
-  -- Market
+  user_id UUID REFERENCES public.user_profiles (id) ON DELETE CASCADE,
+  origin alert_origin NOT NULL DEFAULT 'model',
+  source_handle TEXT,
   market TEXT NOT NULL,
-  selection TEXT,
-
-  -- Odds Snapshot
-  sportsbook TEXT NOT NULL,
-  odds_american TEXT,
-  odds_decimal NUMERIC(6, 2),
-
-  -- Metadata
-  snapshot_time TIMESTAMP WITH TIME ZONE DEFAULT now(),
-
-  -- Betting Percentages (if available)
-  public_bet_percentage NUMERIC(5, 2), -- 68.0 (%)
-  sharp_bet_percentage NUMERIC(5, 2)
+  sportsbook TEXT,
+  edge_value NUMERIC(8,4) NOT NULL,
+  trigger_threshold NUMERIC(8,4),
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  triggered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX idx_odds_history_event ON odds_history(event_name, market);
-CREATE INDEX idx_odds_history_time ON odds_history(snapshot_time DESC);
 ```
+
+**Key Fields:**
+- `origin` - How alert was generated (`model` or `manual`)
+- `edge_value` - Expected value percentage (e.g., 0.068 = 6.8% EV)
+- `trigger_threshold` - Minimum EV that triggered alert
+- `message` - Human-readable alert text
+- `status` - Alert lifecycle (`active`, `acknowledged`, `dismissed`)
+
+---
+
+#### alert_events
+
+Immutable log of alert consumption for accountability reports.
+
+```sql
+CREATE TABLE IF NOT EXISTS public.alert_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alert_id UUID NOT NULL REFERENCES public.edge_alerts (id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.user_profiles (id) ON DELETE CASCADE,
+  action TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+**Common Actions:**
+- `dispatched` - Alert created and sent
+- `acknowledged` - User viewed alert
+- `dismissed` - User dismissed without action
+- `tailed` - User placed bet based on alert
+
+---
+
+### 8.4 Chat Tables
 
 #### chat_sessions
+
 ```sql
-CREATE TABLE chat_sessions (
+CREATE TABLE IF NOT EXISTS public.chat_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
-  title TEXT, -- Auto-generated from first message
-  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  user_id UUID REFERENCES public.user_profiles (id) ON DELETE CASCADE,
+  title TEXT,
+  last_message_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX idx_sessions_user_id ON chat_sessions(user_id, last_message_at DESC);
 ```
 
 #### chat_messages
+
 ```sql
-CREATE TABLE chat_messages (
+CREATE TABLE IF NOT EXISTS public.chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_id UUID REFERENCES chat_sessions(id) ON DELETE CASCADE,
-  role TEXT NOT NULL, -- 'user', 'assistant'
+  session_id UUID REFERENCES public.chat_sessions (id) ON DELETE CASCADE,
+  role TEXT NOT NULL, -- 'user' or 'assistant'
   content TEXT NOT NULL,
   metadata JSONB, -- Structured data (odds tables, charts)
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX idx_messages_session_id ON chat_messages(session_id, created_at);
 ```
+
+---
+
+### 8.5 Utility Functions & Triggers
+
+Keep `updated_at` columns current without manual writes.
+
+```sql
+-- Auto-update updated_at timestamp
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply to all tables with updated_at
+CREATE TRIGGER user_profiles_updated
+BEFORE UPDATE ON public.user_profiles
+FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at();
+
+CREATE TRIGGER bankroll_accounts_updated
+BEFORE UPDATE ON public.bankroll_accounts
+FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at();
+
+CREATE TRIGGER bets_updated
+BEFORE UPDATE ON public.bets
+FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at();
+```
+
+---
+
+### 8.6 Row Level Security (RLS)
+
+After running schema prompts, configure RLS policies to restrict reads/writes to the owning user.
+
+**Example RLS Policy for `user_profiles`:**
+```sql
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own profile"
+  ON public.user_profiles
+  FOR SELECT
+  USING (auth.uid() = auth_user_id);
+
+CREATE POLICY "Users can update own profile"
+  ON public.user_profiles
+  FOR UPDATE
+  USING (auth.uid() = auth_user_id);
+```
+
+**Apply similar policies to:**
+- `bankroll_accounts` (users own their bankrolls)
+- `bets` (users own their bets)
+- `edge_alerts` (users see their own alerts)
+- `chat_sessions` and `chat_messages`
 
 ---
 
@@ -1024,6 +1140,464 @@ data: {"type":"done"}
   ]
 }
 ```
+
+---
+
+## 9.5 Supabase Edge Functions
+
+Edge functions provide the real-time glue for bankroll analytics, edge alerts, and conversational summaries. Each function is deployed to Supabase's Deno runtime and can be triggered via HTTP, database webhooks, or cron schedules.
+
+### Environment Variables
+
+All functions rely on Supabase service role configuration plus feature-specific variables:
+
+| Variable | Description | Required By |
+|----------|-------------|-------------|
+| `SUPABASE_URL` | Project REST endpoint | All functions |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key for privileged operations | All functions |
+| `ODDS_API_KEY` | The Odds API key | `odds-assistant` |
+| `OPENAI_API_KEY` | OpenAI API key for chat completions | `odds-assistant` |
+| `ODDS_FEED_URLS` | Comma-separated odds feed URLs | `ev-scanner-refresh` |
+| `EV_MIN_THRESHOLD` | Minimum EV% for alerts (e.g., `3`) | `ev-scanner-refresh` |
+
+---
+
+### 9.5.1 odds-assistant
+
+**Purpose:** Conversational helper that blends The Odds API snapshots with bettor context before asking OpenAI for a summary.
+
+**Trigger:** HTTP POST from `/api/chat` route
+
+**Request Payload:**
+```json
+{
+  "query": "Any value angles on tonight's Lakers game?",
+  "sportKey": "basketball_nba",
+  "regions": "us,us2",
+  "markets": "h2h,spreads,totals",
+  "bookmakers": "draftkings,fanduel,betmgm",
+  "userProfileId": "00000000-0000-4000-8000-000000000000"
+}
+```
+
+**Parameters:**
+- `query` (required) - User's natural language question
+- `sportKey` (optional) - Sport key from [The Odds API](https://the-odds-api.com/liveapi/guides/v4/#operation/get_sports)
+- `regions`, `markets`, `bookmakers` (optional) - Filters for odds API
+- `userProfileId` (optional) - Loads user context (profile, bankroll, recent bets)
+- `model` (optional) - Override default `gpt-4o-mini`
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "odds_snapshot": {
+    "sportKey": "basketball_nba",
+    "fetchedAt": "2024-04-26T18:03:52.044Z",
+    "filters": {
+      "regions": "us,us2",
+      "markets": "h2h,spreads,totals",
+      "bookmakers": "draftkings,fanduel,betmgm",
+      "oddsFormat": "american"
+    },
+    "events": [
+      {
+        "id": "example-event-id",
+        "sportKey": "basketball_nba",
+        "sportTitle": "NBA",
+        "commenceTime": "2024-04-27T00:00:00Z",
+        "homeTeam": "Los Angeles Lakers",
+        "awayTeam": "Denver Nuggets",
+        "bookmakers": [
+          {
+            "key": "draftkings",
+            "title": "DraftKings",
+            "lastUpdate": "2024-04-26T17:59:13Z",
+            "markets": [
+              {
+                "key": "spreads",
+                "lastUpdate": "2024-04-26T17:59:13Z",
+                "outcomes": [
+                  { "name": "Los Angeles Lakers", "price": -110, "point": -4.5 },
+                  { "name": "Denver Nuggets", "price": -110, "point": 4.5 }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "model_summary": "DraftKings and FanDuel are aligned at Lakers -4.5 (-110). Your bankroll is concentrated on NBA sides, so scale entry modestly unless you have an injury angle."
+}
+```
+
+**Error Response:**
+```json
+{
+  "status": "error",
+  "message": "Failed to fetch odds",
+  "details": { ... }
+}
+```
+
+---
+
+### 9.5.2 bankroll-metrics-sync
+
+**Purpose:** Calculates bankroll aggregates, ROI snapshots, and behavioral tag summaries whenever a bet is inserted or updated.
+
+**Trigger:** Database webhook on `public.bets` table (INSERT/UPDATE events)
+
+**Deployment:**
+```bash
+supabase functions deploy bankroll-metrics-sync --env-file ../.env
+supabase functions trigger new --function bankroll-metrics-sync \
+  --table public.bets --event-type INSERT --event-type UPDATE
+```
+
+**Webhook Payload:**
+```json
+{
+  "type": "INSERT",
+  "table": "bets",
+  "record": {
+    "id": "2f1...",
+    "user_id": "83d...",
+    "bankroll_id": "50e...",
+    "wager_amount": 250,
+    "status": "pending"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "metrics": {
+    "totalBets": 42,
+    "activeBets": 11,
+    "settledBets": 31,
+    "winRate": 0.58,
+    "roi30d": 0.17,
+    "bankrolls": [
+      {
+        "id": "50e...",
+        "label": "MLB Futures",
+        "currency": "USD",
+        "startingBalance": 5000,
+        "currentBalance": 6125,
+        "profit": 1125
+      }
+    ],
+    "topTags": [
+      { "tag": "line_shopper", "count": 8 },
+      { "tag": "live_bet", "count": 5 }
+    ]
+  }
+}
+```
+
+**Side Effects:**
+- Updates `current_balance` in `bankroll_accounts` table
+- Can be consumed by web dashboard for real-time metrics
+
+---
+
+### 9.5.3 edge-alerts-dispatch
+
+**Purpose:** Receives threshold-crossing payloads from internal scanners, persists them to `edge_alerts`, and emits notification objects for real-time broadcast.
+
+**Trigger:** HTTP POST from EV scanner or manual alert creation
+
+**Request:**
+```json
+{
+  "defaultTone": "engaging",
+  "alerts": [
+    {
+      "market": "Chiefs @ Bills - Moneyline",
+      "sportsbook": "BookA",
+      "edgeValue": 0.045,
+      "triggerThreshold": 0.03,
+      "url": "https://booka.example/line",
+      "metadata": { "reason": "Line lagged vs. consensus" }
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "alerts": [
+    {
+      "id": "1c2...",
+      "market": "Chiefs @ Bills - Moneyline",
+      "edge_value": 0.045,
+      "status": "active"
+    }
+  ],
+  "notifications": [
+    {
+      "alertId": "1c2...",
+      "message": "🚨 Chiefs @ Bills - Moneyline: BookA is hanging value (4.5% edge). Jump before it moves!",
+      "tone": "engaging"
+    }
+  ]
+}
+```
+
+**Side Effects:**
+- Creates row in `edge_alerts` table
+- Logs `alert_events` row with `action = "dispatched"`
+- Notifications can be broadcast via Supabase Realtime
+
+---
+
+### 9.5.4 edge-alerts-ack
+
+**Purpose:** Acknowledgment webhook invoked when a bettor consumes an edge alert.
+
+**Trigger:** HTTP POST from chat hub or mobile clients
+
+**Request:**
+```json
+{
+  "alertId": "1c2...",
+  "userId": "83d...",
+  "metadata": { "cta": "tailed" },
+  "resolveAlert": true
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "alert": {
+    "id": "1c2...",
+    "status": "acknowledged",
+    "resolved_at": "2024-05-01T12:00:00Z"
+  }
+}
+```
+
+**Side Effects:**
+- Creates `alert_events` row with `action = "acknowledged"` (or custom action)
+- If `resolveAlert = true`, updates `edge_alerts.status` to `acknowledged` and sets `resolved_at`
+
+---
+
+### 9.5.5 ev-scanner-refresh
+
+**Purpose:** Scheduled odds ingestion that aggregates third-party lines, calculates EV deltas, and synchronizes active entries in `edge_alerts`.
+
+**Trigger:** Cron schedule (every 10 minutes recommended)
+
+**Deployment:**
+```bash
+supabase functions deploy ev-scanner-refresh --env-file ../.env
+supabase functions schedule new daily-odds \
+  --function ev-scanner-refresh \
+  --cron "*/10 * * * *"
+```
+
+**Configuration:**
+- `ODDS_FEED_URLS` - Comma-separated list of odds API endpoints
+- `EV_MIN_THRESHOLD` - Minimum EV% to keep alert active (e.g., `3` for 3%)
+
+**Manual Test Payload:**
+```json
+{
+  "tone": "engaging",
+  "markets": [
+    {
+      "eventId": "nba-123",
+      "market": "Lakers @ Warriors - Spread",
+      "consensusDecimalOdds": 1.91,
+      "books": [
+        { "sportsbook": "BookA", "decimalOdds": 2.05 },
+        { "sportsbook": "BookB", "decimalOdds": 1.88 }
+      ]
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "alerts": [
+    {
+      "id": "c644...",
+      "market": "Lakers @ Warriors - Spread",
+      "sportsbook": "BookA",
+      "edge_value": 0.07
+    }
+  ],
+  "summary": "1 edge refreshed above 3.0% EV."
+}
+```
+
+**Side Effects:**
+- Upserts/inserts rows in `edge_alerts` table
+- Logs `alert_events` with `action = "refreshed"`
+
+---
+
+### 9.5.6 on-auth-profile
+
+**Purpose:** Creates or updates bettor profile when Supabase Auth events fire. Ensures every user starts with consistent defaults.
+
+**Trigger:** Supabase Auth webhook (SIGNED_IN, SIGNED_UP events)
+
+**Expected Payload:**
+```json
+{
+  "type": "SIGNED_IN",
+  "record": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "raw_user_meta_data": {
+      "preferred_timezone": "America/New_York",
+      "favorite_sports": ["NBA", "NFL"],
+      "bankroll_goal": 2500
+    }
+  }
+}
+```
+
+**Behavior:**
+- Checks if `user_profiles` entry exists for `auth_user_id`
+- If not, creates profile with metadata defaults
+- If exists, updates with new metadata
+- Metadata fields are optional (safe defaults applied)
+
+**Side Effects:**
+- Creates/updates row in `user_profiles` table
+
+---
+
+### 9.5.7 chat-digest
+
+**Purpose:** Generates a conversational-ready summary for the home hub based on bankroll, bet, and alert data.
+
+**Trigger:** HTTP POST from frontend or cron job
+
+**Request:**
+```json
+{
+  "userProfileId": "83d...",
+  "tone": "engaging"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "tone": "engaging",
+  "summary": "Good day, NBA fan! In UTC time you're sitting on Bankroll 6125.00 (+1125.00 vs. start). 5 recent bets; latest won on Nuggets ML. 2 live edges queued.",
+  "highlights": [
+    {
+      "type": "bankroll",
+      "title": "Bankroll snapshot",
+      "description": "Total balance 6125.00 (+1125.00 vs. start)."
+    },
+    {
+      "type": "bet",
+      "title": "Latest bet",
+      "description": "Nuggets vs. Suns – Moneyline (won). Stake 250.00."
+    }
+  ],
+  "context": {
+    "profile": { "preferred_timezone": "UTC" },
+    "bankrolls": [{ "label": "Main", "current_balance": 6125.0 }],
+    "recentBets": [{ "event_name": "Nuggets vs. Suns" }],
+    "activeAlerts": [{ "market": "Nuggets -3.5" }]
+  }
+}
+```
+
+**Use Cases:**
+- Home screen digest ("Welcome back! Here's what's happening...")
+- Daily email summaries
+- Push notification content
+
+---
+
+### 9.5.8 Shared Utilities
+
+Located in `/supabase/functions/shared/`, these utilities are imported by all edge functions:
+
+**`env.ts`**
+- `requireEnv(key: string)` - Reads environment variable, throws clear error if missing
+
+**`client.ts`**
+- `createServiceRoleClient()` - Creates Supabase client with service role key
+- Opts out of session persistence for serverless context
+
+**`response.ts`**
+- `jsonResponse(data, status)` - Wraps payload in JSON with CORS headers
+- `emptyResponse(status)` - Returns empty response (default 204)
+- `errorResponse(message, status, details)` - Standardized error format
+
+**`types.ts`**
+- TypeScript definitions for public schema
+- Helpers: `Tables`, `TablesRow`, `TablesInsert`, `TablesUpdate`
+
+---
+
+### Local Development Workflow
+
+1. **Start Supabase locally:**
+   ```bash
+   supabase start
+   ```
+
+2. **Apply schema:**
+   ```bash
+   # Run SQL from section 8 in Supabase SQL Editor
+   ```
+
+3. **Serve individual function:**
+   ```bash
+   # Example: odds-assistant
+   supabase functions serve odds-assistant --env-file ../.env --debug
+
+   # Test with curl
+   curl -i -X POST -H "Content-Type: application/json" \
+     -d '{"query": "Best NBA bets tonight", "sportKey": "basketball_nba"}' \
+     http://localhost:54321/functions/v1/odds-assistant
+   ```
+
+4. **Deploy to production:**
+   ```bash
+   supabase functions deploy odds-assistant --env-file ../.env
+   ```
+
+---
+
+### Observability & Monitoring
+
+**Logging:**
+- View logs in Supabase Dashboard: **Project Settings → Logs → Edge Functions**
+- Filter by function name and log level
+
+**Scheduled Functions:**
+- `ev-scanner-refresh` should run every 10 minutes
+- Monitor via Supabase Log Explorer with `edge-alerts` label
+
+**Triggers:**
+- `bankroll-metrics-sync` fires on bet INSERT/UPDATE
+- Check for recalculation errors in logs
+
+**Alerts:**
+- `edge-alerts-dispatch` logs to `alert_events` table
+- Full lifecycle trail available for analytics
 
 ---
 

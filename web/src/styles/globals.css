@@ -14,3 +14,82 @@ body {
 a {
   @apply text-brand-accent underline-offset-4 hover:underline;
 }
+
+/* Custom Range Slider Styles */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+input[type="range"]::-webkit-slider-track {
+  @apply h-2 rounded-lg bg-white/10;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  @apply h-5 w-5 rounded-full bg-blue-500 cursor-pointer;
+  margin-top: -6px;
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  @apply bg-blue-400 scale-110;
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  @apply bg-blue-600 scale-95;
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-track {
+  @apply h-2 rounded-lg bg-white/10;
+}
+
+input[type="range"]::-moz-range-thumb {
+  @apply h-5 w-5 rounded-full bg-blue-500 cursor-pointer border-0;
+  transition: all 0.2s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  @apply bg-blue-400;
+  transform: scale(1.1);
+}
+
+input[type="range"]::-moz-range-thumb:active {
+  @apply bg-blue-600;
+  transform: scale(0.95);
+}
+
+/* Checkbox Styles */
+input[type="checkbox"] {
+  @apply cursor-pointer;
+}
+
+input[type="checkbox"]:checked {
+  @apply bg-blue-500 border-blue-500;
+}
+
+/* Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 1000px 100%;
+}

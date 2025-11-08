@@ -152,14 +152,14 @@ export function OddsScanner() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="rounded-2xl border border-white/5 bg-black/30 p-6 h-64 animate-pulse"
+              className="rounded-2xl border border-white/5 bg-black/30 p-6 h-64 overflow-hidden"
             >
-              <div className="h-6 bg-white/10 rounded w-1/2 mb-4"></div>
-              <div className="h-4 bg-white/5 rounded w-1/4 mb-6"></div>
+              <div className="h-6 bg-white/10 rounded w-1/2 mb-4 animate-shimmer"></div>
+              <div className="h-4 bg-white/5 rounded w-1/4 mb-6 animate-shimmer"></div>
               <div className="space-y-3">
-                <div className="h-10 bg-white/5 rounded"></div>
-                <div className="h-10 bg-white/5 rounded"></div>
-                <div className="h-10 bg-white/5 rounded"></div>
+                <div className="h-10 bg-white/5 rounded animate-shimmer"></div>
+                <div className="h-10 bg-white/5 rounded animate-shimmer"></div>
+                <div className="h-10 bg-white/5 rounded animate-shimmer"></div>
               </div>
             </div>
           ))}

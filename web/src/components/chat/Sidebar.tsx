@@ -25,6 +25,10 @@ const chatHistory = [
 ] as const;
 
 const secondaryLinks = [
+  { label: "Analytics", href: "/analytics", emoji: "📈" },
+  { label: "Odds Scanner", href: "/odds", emoji: "📊" },
+  { label: "Bankroll", href: "/bankroll", emoji: "💰" },
+  { label: "Alerts", href: "/alerts", emoji: "🔔" },
   { label: "Prompts", href: "/prompts" },
   { label: "Files", href: "/files" },
   { label: "Settings", href: "/settings" }
@@ -81,9 +85,16 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center justify-between rounded-lg px-2 py-2 text-slate-300 transition hover:text-white"
+              className={`flex items-center justify-between rounded-lg px-2 py-2 transition ${
+                pathname === item.href
+                  ? "bg-blue-500/20 text-blue-400"
+                  : "text-slate-300 hover:text-white"
+              }`}
             >
-              <span>{item.label}</span>
+              <span>
+                {"emoji" in item && <span className="mr-2">{item.emoji}</span>}
+                {item.label}
+              </span>
               <span aria-hidden className="text-slate-500">→</span>
             </Link>
           ))}

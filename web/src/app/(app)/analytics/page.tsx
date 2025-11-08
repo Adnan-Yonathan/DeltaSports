@@ -228,7 +228,7 @@ export default function AnalyticsPage() {
                   • Moneyline bets have your highest win rate (70%) - focus on these markets
                 </li>
                 <li>
-                  • You're on a 3-bet winning streak - maintain discipline and stick to your strategy
+                  • You&apos;re on a 3-bet winning streak - maintain discipline and stick to your strategy
                 </li>
                 <li>
                   • {topOpportunities.length} high-value opportunities available in Odds Scanner
